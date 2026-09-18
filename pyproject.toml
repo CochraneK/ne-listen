@@ -12,6 +12,9 @@ license = {text = "MIT"}
 authors = [{name = "Cochrane Kang"}]
 dependencies = ["jieba>=0.42.1"]
 
+[project.optional-dependencies]
+deep = ["scikit-learn>=1.7,<2"]
+
 [project.scripts]
 ne-listen = "nelisten.cli:main"
 

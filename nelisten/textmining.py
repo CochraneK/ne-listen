@@ -33,6 +33,8 @@ _EN_STOP = {
     "even","still","now","gonna","wanna","gotta","baby",
 }
 
+_TERM_BLOCKLIST = {"纯音乐", "欣赏", "every"}
+
 _ZH_STOP = {
     "我们","你们","他们","她们","一个","这样","那么","什么","怎么","还是","只是","不是","没有",
     "可以","因为","所以","已经","如果","时候","这里","那里","自己","然后","真的","知道","就是",
@@ -158,7 +160,7 @@ def select_text_corpus_song_ids(data: dict[str, Any], max_songs: int = 180) -> l
     return [sid for sid, _ in sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:max_songs]]
 
 
-def _song_weights(data: dict[str, Any]) -> dict[str, float]:
+def song_weights(data: dict[str, Any]) -> dict[str, float]:
     weights: defaultdict[str, float] = defaultdict(lambda: 0.05)
     for rec in (data.get("records") or {}).get("all") or []:
         sid = str((rec.get("song") or {}).get("id"))
@@ -223,7 +225,7 @@ def _weighted_tfidf(docs: dict[str, list[str]], weights: dict[str, float], limit
     stable = [
         (term, score)
         for term, score in scored.items()
-        if len(term.strip()) >= 2 and song_counts[term] >= min_df
+        if len(term.strip()) >= 2 and song_counts[term] >= min_df and term not in _TERM_BLOCKLIST
     ]
     stable.sort(key=lambda item: item[1], reverse=True)
     return [
@@ -297,7 +299,7 @@ def analyze_text(data: dict[str, Any]) -> dict[str, Any]:
     }
     docs = {sid: tokenize(text) for sid, text in cleaned.items()}
     docs = {sid: tokens for sid, tokens in docs.items() if tokens}
-    weights = _song_weights(data)
+    weights = song_weights(data)
     selected = int((data.get("textCorpusMeta") or {}).get("selectedSongs") or len(lyrics))
     successful = len(cleaned)
 
@@ -318,10 +320,14 @@ def analyze_text(data: dict[str, Any]) -> dict[str, Any]:
     q = _term_distribution(recent_ids, docs, weights)
     jsd = _js_divergence(p, q)
 
+    doc_freq = Counter()
+    for tokens in docs.values():
+        doc_freq.update(set(tokens))
+
     rising = []
     for term in set(p) | set(q):
         diff = q.get(term, 0.0) - p.get(term, 0.0)
-        if diff > 0:
+        if diff > 0 and doc_freq[term] >= 2 and term not in _TERM_BLOCKLIST:
             rising.append({"term": term, "delta": diff})
     rising.sort(key=lambda x: x["delta"], reverse=True)
 

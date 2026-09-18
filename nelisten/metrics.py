@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
+from .deep_text import analyze_deep_text
 from .textmining import analyze_text
 
 
@@ -157,6 +158,84 @@ def _provider_facts(payloads: dict[str, Any]) -> dict[str, Any]:
         "yearItems": selected(year.get("yearItems"), ("year", "playDuration", "playNum")),
         "stylePreferences": selected(style.get("tagPreferenceVos"), ("tagId", "tagName", "ratio")),
     }
+def _playlist_network(playlists: list[dict[str, Any]]) -> dict[str, Any]:
+    track_sets: dict[str, set[str]] = {}
+    names: dict[str, str] = {}
+    artist_playlists: dict[str, set[str]] = {}
+    artist_names: dict[str, str] = {}
+    artist_song_counts: Counter[str] = Counter()
+    song_membership: Counter[str] = Counter()
+
+    for playlist in playlists:
+        pid = str(playlist.get("id") or playlist.get("name") or "")
+        if not pid:
+            continue
+        names[pid] = str(playlist.get("name") or "Untitled")
+        tracks = {
+            str(song.get("id"))
+            for song in (playlist.get("tracks") or [])
+            if song.get("id") is not None
+        }
+        track_sets[pid] = tracks
+        song_membership.update(tracks)
+
+        seen_artist_song: set[tuple[str, str]] = set()
+        for song in playlist.get("tracks") or []:
+            sid = str(song.get("id") or "")
+            for artist in song.get("artists") or []:
+                aid = str(artist.get("id") or artist.get("name") or "")
+                if not aid:
+                    continue
+                artist_names[aid] = str(artist.get("name") or "Unknown")
+                artist_playlists.setdefault(aid, set()).add(pid)
+                pair = (aid, sid)
+                if pair not in seen_artist_song:
+                    artist_song_counts[aid] += 1
+                    seen_artist_song.add(pair)
+
+    ids = list(track_sets)
+    pairs = []
+    jac_values = []
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            union = track_sets[a] | track_sets[b]
+            if not union:
+                continue
+            inter = track_sets[a] & track_sets[b]
+            jac = len(inter) / len(union)
+            jac_values.append(jac)
+            if inter:
+                pairs.append({
+                    "a": names[a],
+                    "b": names[b],
+                    "intersection": len(inter),
+                    "jaccard": round(jac * 100, 1),
+                })
+    pairs.sort(key=lambda item: (item["jaccard"], item["intersection"]), reverse=True)
+
+    bridge_artists = [
+        {
+            "name": artist_names[aid],
+            "playlistCount": len(pids),
+            "songCount": artist_song_counts[aid],
+        }
+        for aid, pids in artist_playlists.items()
+        if len(pids) >= 2
+    ]
+    bridge_artists.sort(key=lambda item: (item["playlistCount"], item["songCount"]), reverse=True)
+
+    multi = sum(1 for count in song_membership.values() if count >= 2)
+    return {
+        "playlistCount": len(track_sets),
+        "pairsCompared": len(jac_values),
+        "averageJaccard": round(sum(jac_values) / len(jac_values) * 100, 2) if jac_values else None,
+        "songsInMultiplePlaylists": multi,
+        "multiPlaylistShare": round(multi / len(song_membership) * 100, 1) if song_membership else None,
+        "topOverlaps": pairs[:10],
+        "bridgeArtists": bridge_artists[:12],
+    }
+
+
 def analyze(data: dict[str, Any]) -> dict[str, Any]:
     records = (data.get("records") or {}).get("all") or []
     week_records = (data.get("records") or {}).get("week") or []
@@ -297,6 +376,8 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
             "score": round(len(available) / len(expected) * 100),
         },
         "text": analyze_text(data),
+        "deepText": analyze_deep_text(data),
+        "network": _playlist_network(playlists),
         "providerFacts": _provider_facts(provider_payloads),
         "providerShapes": {
             key: _shape(value)
