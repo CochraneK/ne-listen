@@ -54,15 +54,17 @@ GitHub Secret
 
 不会上传到 Page：`MUSIC_U`、完整 Cookie、raw API response、snapshot、normalized JSON。Page 只包含派生的报告 HTML 与聚合后的 `metrics.json`。
 
-### 当前报告章节
+### 当前分析层
 
-- 生涯概览：已知播放、长期排行歌曲、红心数、歌单数、账户等级 / listenSongs；
-- How you listen：Repeat Index、Artist Loyalty、Taste Diversity、Recent outside Top100；
-- 长期偏好：Top songs / artists / albums；
-- Current rotation：本周歌曲与歌手，以及最近播放是否落在长期 Top100；
-- Taste map：发行年代、Hidden Favorites；
-- Library：自建 / 收藏歌单、歌单曲目覆盖；
-- Data coverage：明确哪些网易云来源本次真正拿到了。
+- **Listening behavior**：Repeat Index、Artist Loyalty、Taste Diversity、长期 Top100 与最近播放；
+- **Native footprint**：网易云周/月/年足迹、曲风、语言、年代与听歌时段；
+- **Lyric text mining**：私有歌词语料、行为加权 TF-IDF、词汇结构、语言脚本、长期↔近期 JSD；
+- **Deep text**：NMF 主题、LSA 潜在语义距离、KMeans 对照、AMI 方法一致性；
+- **Playlist network**：歌单 Jaccard 重叠、网络组件、跨歌单桥梁歌手；
+- **Longitudinal history**：公开保存不含歌词/明细的日级聚合 `history.json`，为后续 taste drift / change-point 做准备；
+- **Evidence layer**：unknown ≠ 0；长期排行只按网易云当前可见 Top100 解释。
+
+详见 `docs/ANALYSIS.md` 与 `docs/TEXT_MINING.md`。
 
 > 网易云的“所有时间听歌排行”并不等于逐次、完整的终身播放日志。ne-listen 不把不可恢复的历史伪造成精确时间线。
 
@@ -71,7 +73,7 @@ GitHub Secret
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e '.[deep]'
 ```
 
 连接本地兼容 API：

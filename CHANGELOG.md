@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — text, topic and network analysis
+
+- private bounded lyric corpus (default 180 high-evidence songs)
+- lyric cleaning, Chinese segmentation and multilingual script profiling
+- behavior-weighted TF-IDF and linguistic-field statistics
+- long-term vs recent Jensen–Shannon lexical divergence
+- NMF topic model + LSA semantic geometry + KMeans cross-check
+- AMI reliability signal to prevent overclaiming unstable topics
+- playlist Jaccard network, connected components and bridge artists
+- public-safe daily aggregate `history.json`
+- provider/production metadata filtering from lyric analysis
+- public report never includes lyric strings or login credentials
+
 ## 0.2.0 — real personal archive
 
 - real NetEase account workflow via GitHub Actions Secret

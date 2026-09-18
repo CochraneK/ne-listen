@@ -21,9 +21,19 @@
 
 https://cochranek.github.io/ne-listen/
 
+## Latest validated analysis
+
+- Default text corpus: 180 requested lyrics; ~99% usable lyric coverage in the latest run.
+- Lexical layer: behavior-weighted TF-IDF + JSD long-term/recent contrast.
+- Deep layer: 152 lyric documents modeled; NMF/LSA/KMeans working; AMI is deliberately exposed because topic agreement is exploratory rather than definitive.
+- Playlist network: all 18 playlists included; overlap graph and bridge-artist metrics generated.
+- Public-safe history: first 2026-09-18 aggregate snapshot published.
+
 ## Next research-quality upgrades
 
-- Parse longitudinal snapshot-to-snapshot change once enough ne-listen snapshots accumulate.
+- Add multilingual transformer embedding / BERTopic as a **manual deep** mode rather than routine CI.
+- Add lyric emotion / VAD content with explicit “lyrics ≠ listener mood” boundary.
+- Add comment/reception mining as a separate social-interpretation corpus.
+- Parse longitudinal taste drift and change points once multiple daily history points exist.
 - Add explicit metric-version metadata to published `metrics.json`.
-- Add automated Page contract checks for accidental credential/raw-data leakage.
-- Evaluate whether provider `totalDuration` / annual `playDuration` units can be independently verified before human-readable conversion.
+- Evaluate provider duration units before converting them into human-readable hours.

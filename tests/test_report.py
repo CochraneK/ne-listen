@@ -21,6 +21,9 @@ class ReportTest(unittest.TestCase):
             self.assertIn("<details>", body)
             self.assertIn("数据说明", body)
             self.assertNotIn("Data coverage</h2>", body)
+            self.assertNotIn("MUSIC_U=", body)
+            self.assertNotIn('"lyric":', body)
+            self.assertNotIn('"lrc":', body)
 
 
 if __name__ == "__main__":
