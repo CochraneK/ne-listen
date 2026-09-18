@@ -19,13 +19,16 @@
 3. **Observed / Derived / Estimated 分层**：报告告诉你每个指标从哪来。
 4. **Snapshot-first**：每次同步都保存快照，越用越像自己的长期音乐数据库。
 5. **Adapter 可替换**：不把项目绑定到某一个逆向 API 实现。
-6. **隐私默认安全**：Cookie、raw、snapshot、个人报告默认不进 Git。
+6. **隐私默认安全**：Cookie、raw、snapshot 不进 Git；公开 Page 只发布派生报告。
 
 ## 真实网易云 Page
 
 仓库支持和 `we-read` 类似的真实个人档案模式，而且不需要把 Cookie 发到聊天或提交到 Git。
 
-在 GitHub 仓库 `Settings → Secrets and variables → Actions` 新建 repository secret：
+### 第一次启用
+
+1. 打开仓库 `Settings → Pages`，在 **Build and deployment → Source** 选择 **GitHub Actions**。
+2. 打开 `Settings → Secrets and variables → Actions`，新建 repository secret：
 
 ```text
 Name: NETEASE_MUSIC_U
@@ -33,6 +36,8 @@ Value: 只填 MUSIC_U= 后面的值
 ```
 
 然后到 `Actions → Build listening archive → Run workflow` 手动运行一次。
+
+> `MUSIC_U` 是登录凭据。不要提交到 Git、Issue、截图或聊天；只存进 GitHub Actions Secret 或本地环境变量。
 
 Workflow：
 
@@ -47,7 +52,7 @@ GitHub Secret
 → GitHub Pages artifact
 ```
 
-不会上传到 Page：`MUSIC_U`、完整 Cookie、raw API response、snapshot、normalized JSON。Page 只包含报告 HTML 与聚合后的 `metrics.json`。
+不会上传到 Page：`MUSIC_U`、完整 Cookie、raw API response、snapshot、normalized JSON。Page 只包含派生的报告 HTML 与聚合后的 `metrics.json`。
 
 ### 当前报告章节
 
@@ -80,7 +85,7 @@ ne-listen sync
 ## 安全边界
 
 - 不提交 `MUSIC_U`、Cookie 或二维码登录凭据。
-- 不提交 `data/raw/`、`data/snapshots/`。
+- 不提交 `data/raw/`、`data/snapshots/`、`data/normalized/`。
 - 不调用下载/解灰接口。
 - 不执行点赞、收藏、评论、歌单编辑等远端写操作。
 - 默认只读。
