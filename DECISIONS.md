@@ -24,6 +24,6 @@ Do not call remote mutations. Authentication is used only to retrieve the user's
 
 Behavioral metrics describe listening distributions. They are not automatically translated into personality, diagnosis, mood or psychological traits.
 
-## D007 — public Pages uses synthetic data
+## D007 — Pages may publish a derived real-data report, never credentials/raw archive
 
-GitHub Pages must never require or publish a real MUSIC_U cookie or raw personal listening archive. The default public Page is a synthetic demo.
+If `NETEASE_MUSIC_U` is intentionally configured as a repository secret, the ephemeral runner may build the user's derived HTML report. The cookie, raw responses, normalized archive and snapshots are never included in the Pages artifact. Without the secret, Pages falls back to a synthetic demo.

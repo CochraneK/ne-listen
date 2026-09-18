@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "raw-v1",
+  "source": "example",
+  "collectedAt": "2026-09-18T00:00:00+00:00",
+  "uid": "demo",
+  "responses": {
+    "profile": {"ok": true, "status": 200, "data": {"profile": {"userId": "demo", "nickname": "Example"}}, "error": null, "path": "/user/detail"},
+    "record_all": {"ok": true, "status": 200, "data": {"allData": []}, "error": null, "path": "/user/record"}
+  }
+}

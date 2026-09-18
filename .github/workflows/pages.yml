@@ -58,6 +58,8 @@ jobs:
           mkdir -p _site
           cp build/demo/report/index.html _site/index.html
           cp build/demo/report/metrics.json _site/metrics.json
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
