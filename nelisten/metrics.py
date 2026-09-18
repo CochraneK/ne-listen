@@ -63,6 +63,26 @@ def _decades(songs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"name": k, "count": v} for k, v in sorted(counts.items())]
 
 
+def _shape(value: Any, depth: int = 3) -> Any:
+    """Return schema-only diagnostics: keys, container lengths and primitive types, never values."""
+    if depth <= 0:
+        return type(value).__name__
+    if isinstance(value, dict):
+        return {
+            "type": "object",
+            "keys": {str(k): _shape(v, depth - 1) for k, v in value.items()},
+        }
+    if isinstance(value, list):
+        return {
+            "type": "array",
+            "length": len(value),
+            "item": _shape(value[0], depth - 1) if value else None,
+        }
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
 def analyze(data: dict[str, Any]) -> dict[str, Any]:
     records = (data.get("records") or {}).get("all") or []
     week_records = (data.get("records") or {}).get("week") or []
@@ -100,7 +120,8 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
     artist_share = _top_share([int(v) for v in artist_plays.values()], 0.1)
     diversity = _effective_diversity(Counter({k: int(v) for k, v in artist_plays.items()}))
 
-    recent_ids = [str((x.get("song") or {}).get("id")) for x in ((data.get("records") or {}).get("recent") or [])]
+    recent_records = (data.get("records") or {}).get("recent") or []
+    recent_ids = [str((x.get("song") or {}).get("id")) for x in recent_records]
     low_history_recent = sum(1 for sid in recent_ids if play_by_song.get(sid, 0) <= 2)
     exploration_proxy = (low_history_recent / len(recent_ids)) if recent_ids else None
 
@@ -115,6 +136,9 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
     created = [p for p in playlists if not p.get("subscribed")]
     subscribed = [p for p in playlists if p.get("subscribed")]
     playlist_tracks = {str(song.get("id")) for p in playlists for song in (p.get("tracks") or []) if song.get("id") is not None}
+    playlist_declared_tracks = sum(int(p.get("trackCount") or 0) for p in playlists)
+    playlist_fetched_tracks = sum(len(p.get("tracks") or []) for p in playlists)
+    playlist_track_coverage = _pct(playlist_fetched_tracks / playlist_declared_tracks) if playlist_declared_tracks else None
     observed_song_ids = set(play_by_song)
     liked_observed = len(observed_song_ids & liked)
 
@@ -154,6 +178,10 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
             "likedIds": len(liked),
             "likedObserved": liked_observed,
             "playlistKnownTracks": len(playlist_tracks),
+            "playlistDeclaredTracks": playlist_declared_tracks,
+            "playlistFetchedTracks": playlist_fetched_tracks,
+            "playlistTrackCoverage": playlist_track_coverage,
+            "recentObserved": len(recent_records),
             "accountLevel": profile.get("level"),
             "providerListenSongs": profile.get("listenSongs"),
             "accountAgeDays": profile.get("createDays"),
@@ -192,5 +220,9 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
             "available": available,
             "missing": [k for k in expected if k not in available],
             "score": round(len(available) / len(expected) * 100),
+        },
+        "providerShapes": {
+            key: _shape(value)
+            for key, value in (data.get("providerPayloads") or {}).items()
         },
     }
