@@ -63,7 +63,7 @@ def _decades(songs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"name": k, "count": v} for k, v in sorted(counts.items())]
 
 
-def _shape(value: Any, depth: int = 3) -> Any:
+def _shape(value: Any, depth: int = 5) -> Any:
     """Return schema-only diagnostics: keys, container lengths and primitive types, never values."""
     if depth <= 0:
         return type(value).__name__
@@ -81,6 +81,62 @@ def _shape(value: Any, depth: int = 3) -> Any:
     if value is None:
         return "null"
     return type(value).__name__
+
+
+def _provider_facts(payloads: dict[str, Any]) -> dict[str, Any]:
+    def body(name: str) -> dict[str, Any]:
+        root = payloads.get(name)
+        if not isinstance(root, dict):
+            return {}
+        data = root.get("data")
+        return data if isinstance(data, dict) else {}
+
+    total = body("listenTotal")
+    week_rt = body("listenRealtimeWeek")
+    month_rt = body("listenRealtimeMonth")
+    week_report = body("listenReportWeek")
+    month_report = body("listenReportMonth")
+    year = body("listenYear")
+    style = body("stylePreference")
+
+    def block(root: dict[str, Any], name: str) -> dict[str, Any]:
+        value = root.get(name)
+        return value if isinstance(value, dict) else {}
+
+    week_dist = block(week_rt, "listenTimeDistributionBlock")
+    month_dist = block(month_rt, "listenTimeDistributionBlock")
+    week_time = block(week_report, "listenTimeBlock")
+    month_time = block(month_report, "listenTimeBlock")
+    month_top_song = block(month_report, "topSongBlock")
+    month_top_artist = block(month_report, "topArtistBlock")
+    month_top_style = block(month_report, "topStyleBlock")
+    month_top_age = block(month_report, "topAgeBlock")
+
+    return {
+        "totalDurationRaw": total.get("totalDuration"),
+        "weekPlayDurationRaw": week_dist.get("playDuration"),
+        "weekListenDays": week_dist.get("listenDays"),
+        "weekPlayDurationText": week_time.get("playDurationText"),
+        "monthPlayDurationRaw": month_dist.get("playDuration"),
+        "monthListenDays": month_dist.get("listenDays"),
+        "monthPlayDurationText": month_time.get("playDurationText"),
+        "monthTopSong": {
+            "name": month_top_song.get("songName"),
+            "playCount": month_top_song.get("playCount"),
+        },
+        "monthTopArtist": {
+            "name": month_top_artist.get("artistName"),
+            "playCount": month_top_artist.get("playCount"),
+        },
+        "monthTopStyle": {
+            "genre": month_top_style.get("genreName"),
+            "secondGenre": month_top_style.get("secondGenreName"),
+        },
+        "monthTopAge": month_top_age.get("age"),
+        "displayYear": year.get("displayYear"),
+        "yearItemCount": len(year.get("yearItems") or []) if isinstance(year.get("yearItems"), list) else 0,
+        "styleTagCount": len(style.get("tags") or []) if isinstance(style.get("tags"), list) else 0,
+    }
 
 
 def analyze(data: dict[str, Any]) -> dict[str, Any]:
@@ -166,6 +222,7 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
     available = [k for k in expected if caps.get(k)]
 
     profile = data.get("profile") or {}
+    provider_payloads = data.get("providerPayloads") or {}
     return {
         "summary": {
             "knownPlays": total_plays,
@@ -221,8 +278,9 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
             "missing": [k for k in expected if k not in available],
             "score": round(len(available) / len(expected) * 100),
         },
+        "providerFacts": _provider_facts(provider_payloads),
         "providerShapes": {
             key: _shape(value)
-            for key, value in (data.get("providerPayloads") or {}).items()
+            for key, value in provider_payloads.items()
         },
     }
