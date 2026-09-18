@@ -29,6 +29,8 @@ _EN_STOP = {
     "from","they","will","just","like","what","when","where","who","why","how","its","our","out",
     "one","two","get","got","let","too","yeah","oh","ooh","ah","la","na","im","i'm","dont","don't",
     "me","my","we","us","it","is","in","on","to","of","a","an","i","be","so","if","as","at",
+    "her","hers","him","his","them","their","theirs","there","here","then","up","down","only",
+    "even","still","now","gonna","wanna","gotta","baby",
 }
 
 _ZH_STOP = {
@@ -73,7 +75,12 @@ def clean_lyric(text: str) -> str:
         if len(line) > 240:
             continue
         lines.append(line)
-    return "\n".join(lines)
+
+    joined = "\n".join(lines).strip()
+    compact = re.sub(r"[\s，,。.!！?？、]+", "", joined)
+    if compact in {"纯音乐请欣赏", "纯音乐欣赏", "instrumental"}:
+        return ""
+    return joined
 
 
 def _fallback_cjk_tokens(segment: str) -> list[str]:
@@ -96,14 +103,21 @@ def tokenize(text: str) -> list[str]:
         if word not in _EN_STOP and len(word) > 1:
             tokens.append(word)
 
-    for segment in _CJK_RE.findall(text):
-        if jieba is not None:
-            for token in jieba.cut(segment, cut_all=False):
-                token = token.strip()
-                if len(token) >= 2 and token not in _ZH_STOP:
-                    tokens.append(token)
-        else:
-            tokens.extend(_fallback_cjk_tokens(segment))
+    # Jieba is Chinese-specific. If a lyric contains substantial kana, avoid
+    # interpreting its kanji as Chinese words; the script profile still records it.
+    kana_chars = len(_KANA_RE.findall(text))
+    cjk_chars = sum(len(segment) for segment in _CJK_RE.findall(text))
+    japanese_dominant = kana_chars >= 8 and kana_chars >= max(1, int(cjk_chars * 0.08))
+
+    if not japanese_dominant:
+        for segment in _CJK_RE.findall(text):
+            if jieba is not None:
+                for token in jieba.cut(segment, cut_all=False):
+                    token = token.strip()
+                    if len(token) >= 2 and token not in _ZH_STOP:
+                        tokens.append(token)
+            else:
+                tokens.extend(_fallback_cjk_tokens(segment))
     return tokens
 
 
@@ -205,10 +219,16 @@ def _weighted_tfidf(docs: dict[str, list[str]], weights: dict[str, float], limit
             scored[term] += (count / total) * idf * weight
             song_counts[term] += 1
 
+    min_df = max(2, math.ceil(n_docs * 0.02))
+    stable = [
+        (term, score)
+        for term, score in scored.items()
+        if len(term.strip()) >= 2 and song_counts[term] >= min_df
+    ]
+    stable.sort(key=lambda item: item[1], reverse=True)
     return [
         {"term": term, "score": round(score, 4), "songCount": song_counts[term]}
-        for term, score in scored.most_common(limit)
-        if len(term.strip()) >= 2
+        for term, score in stable[:limit]
     ]
 
 
@@ -268,7 +288,13 @@ def analyze_text(data: dict[str, Any]) -> dict[str, Any]:
             "drift": {},
         }
 
-    cleaned = {str(sid): clean_lyric(text) for sid, text in lyrics.items() if isinstance(text, str) and text.strip()}
+    cleaned = {
+        str(sid): cleaned_text
+        for sid, text in lyrics.items()
+        if isinstance(text, str) and text.strip()
+        for cleaned_text in [clean_lyric(text)]
+        if cleaned_text
+    }
     docs = {sid: tokenize(text) for sid, text in cleaned.items()}
     docs = {sid: tokens for sid, tokens in docs.items() if tokens}
     weights = _song_weights(data)
@@ -302,6 +328,7 @@ def analyze_text(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "available": bool(docs),
         "selectedSongs": selected,
+        "providerLyricResponses": int((data.get("textCorpusMeta") or {}).get("successfulResponses") or 0),
         "songsWithLyrics": successful,
         "songsTokenized": len(docs),
         "coverage": round(successful / selected * 100, 1) if selected else None,
