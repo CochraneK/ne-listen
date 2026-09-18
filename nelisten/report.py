@@ -37,6 +37,17 @@ def _decade_bars(items: list[dict[str, Any]]) -> str:
     return _bars(adapted, "count")
 
 
+def _fact_rows(items: list[dict[str, Any]], label_key: str, value_key: str, suffix: str = "") -> str:
+    rows = []
+    for item in items or []:
+        label = item.get(label_key)
+        value = item.get(value_key)
+        if label is None or value is None:
+            continue
+        rows.append(f'<div class="fact-row"><span>{esc(label)}</span><b>{esc(value)}{suffix}</b></div>')
+    return "".join(rows) or '<div class="empty">No observed data yet.</div>'
+
+
 def _provider_badges(data: dict[str, Any]) -> str:
     caps = data.get("capabilities") or {}
     groups = [
@@ -59,6 +70,7 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     s = metrics["summary"]
     idx = metrics["indices"]
     cov = metrics["coverage"]
+    pf = metrics.get("providerFacts") or {}
     profile = data.get("profile") or {}
     collected = data.get("collectedAt") or "Unknown"
     raw_json = json.dumps({"schemaVersion": data.get("schemaVersion"), "coverage": cov}, ensure_ascii=False)
@@ -77,7 +89,7 @@ a{{color:inherit}} .shell{{max-width:1180px;margin:auto;padding:28px 22px 80px}}
 .hero{{display:grid;grid-template-columns:1.5fr .8fr;gap:24px;align-items:end;margin-bottom:28px}} h1{{font-size:clamp(44px,8vw,94px);line-height:.93;letter-spacing:-.065em;margin:0 0 22px;max-width:850px}} .lead{{font-size:18px;color:var(--muted);max-width:720px}} .identity{{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:26px;padding:24px;box-shadow:var(--shadow)}} .identity small{{color:var(--muted)}} .identity strong{{display:block;font-size:24px;margin-top:4px}} .source-row{{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}} .source{{font-size:11px;border:1px solid var(--line);padding:5px 8px;border-radius:999px}} .source.on{{color:var(--good)}} .source.off{{color:#697384}}
 .grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}} .stat,.metric,.panel{{border:1px solid var(--line);background:rgba(18,23,34,.88);border-radius:22px}} .stat{{padding:22px}} .stat b{{font-size:32px;letter-spacing:-.04em;display:block}} .stat span{{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}} .stat small{{display:block;color:#697384;margin-top:6px}}
 .section{{margin-top:54px;scroll-margin-top:90px}} .section-head{{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:17px}} h2{{font-size:30px;letter-spacing:-.04em;margin:0}} .section-head p{{margin:0;color:var(--muted);max-width:560px;text-align:right}} .metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}} .metric{{padding:20px;min-height:180px}} .tag{{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}} .metric-value{{font-size:36px;font-weight:800;letter-spacing:-.04em;margin-top:16px}} .metric-label{{font-weight:700}} .metric p{{color:var(--muted);font-size:12px;margin:8px 0 0}}
-.two{{display:grid;grid-template-columns:1fr 1fr;gap:16px}} .three{{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px}} .panel{{padding:24px;overflow:hidden}} .panel h3{{font-size:18px;margin:0 0 5px}} .panel .sub{{color:var(--muted);font-size:12px;margin:0 0 18px}} .bar-row{{display:flex;gap:12px;align-items:center;margin:13px 0}} .rank{{font-size:11px;color:#657084;width:22px}} .bar-main{{flex:1;min-width:0}} .bar-label{{display:flex;justify-content:space-between;gap:12px;font-size:13px}} .bar-label span{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}} .bar-label b{{font-size:12px;color:var(--muted)}} .track{{height:5px;background:#232b39;border-radius:999px;margin-top:6px;overflow:hidden}} .fill{{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:999px}} .empty{{padding:30px 0;color:var(--muted)}}
+.two{{display:grid;grid-template-columns:1fr 1fr;gap:16px}} .three{{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px}} .panel{{padding:24px;overflow:hidden}} .panel h3{{font-size:18px;margin:0 0 5px}} .panel .sub{{color:var(--muted);font-size:12px;margin:0 0 18px}} .bar-row{{display:flex;gap:12px;align-items:center;margin:13px 0}} .rank{{font-size:11px;color:#657084;width:22px}} .bar-main{{flex:1;min-width:0}} .bar-label{{display:flex;justify-content:space-between;gap:12px;font-size:13px}} .bar-label span{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}} .bar-label b{{font-size:12px;color:var(--muted)}} .track{{height:5px;background:#232b39;border-radius:999px;margin-top:6px;overflow:hidden}} .fill{{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:999px}} .empty{{padding:30px 0;color:var(--muted)}} .fact-row{{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid rgba(38,46,62,.65);font-size:13px}} .fact-row:last-child{{border-bottom:0}} .fact-row span{{color:var(--muted)}} .fact-row b{{text-align:right}}
 .story{{display:grid;grid-template-columns:1fr 1fr;gap:14px}} .story-card{{padding:24px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(145deg,rgba(255,91,103,.09),rgba(18,23,34,.92))}} .story-card b{{display:block;font-size:25px;letter-spacing:-.03em;margin-bottom:6px}} .story-card p{{margin:0;color:var(--muted)}}
 .coverage{{display:grid;grid-template-columns:220px 1fr;gap:26px;align-items:center}} .ring{{width:180px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--good) 0 {cov['score']}%,#252c38 {cov['score']}% 100%);position:relative}} .ring:after{{content:"";position:absolute;inset:14px;background:var(--panel);border-radius:50%}} .ring b{{font-size:38px;z-index:1}} .caps{{display:grid;grid-template-columns:1fr 1fr;gap:8px}} .cap{{padding:10px 12px;border-radius:12px;background:#171d28;font-size:12px}} .yes{{color:var(--good)}} .no{{color:#7d8795}} footer{{margin-top:60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:22px}}
 @media(max-width:950px){{.hero,.two,.three,.coverage{{grid-template-columns:1fr}} .grid,.metrics{{grid-template-columns:repeat(2,1fr)}} .section-head{{align-items:start;flex-direction:column}} .section-head p{{text-align:left}}}} @media(max-width:560px){{.grid,.metrics,.caps,.story{{grid-template-columns:1fr}} .shell{{padding:20px 14px 60px}} .nav{{margin:-20px -14px 42px;padding:14px}} .navlinks a:nth-child(n+4){{display:none}}}}
@@ -104,6 +116,22 @@ a{{color:inherit}} .shell{{max-width:1180px;margin:auto;padding:28px 22px 80px}}
 </div></section>
 <section class="section two"><div class="panel"><h3>Most played songs</h3><p class="sub">当前“所有时间排行”接口能观测到的高频歌曲。</p>{_bars(metrics['topSongs'],'playCount')}</div><div class="panel"><h3>Artists you return to</h3><p class="sub">多歌手歌曲按歌手平分一次播放权重。</p>{_bars(metrics['topArtists'],'playCount')}</div></section>
 <section class="section" id="now"><div class="section-head"><div><div class="pill">Current rotation</div><h2>最近这一周，你在回到什么</h2></div><p>把长期偏好和短期循环分开看，避免把“这周突然上头”误当作长期口味。</p></div><div class="two"><div class="panel"><h3>Week songs</h3>{_bars(metrics['weekSongs'],'playCount')}</div><div class="panel"><h3>Week artists</h3>{_bars(metrics['weekArtists'],'playCount')}</div></div></section>
+<section class="section" id="native"><div class="section-head"><div><div class="pill">Observed · NetEase native</div><h2>网易云自己的听歌足迹</h2></div><p>这一层不是 ne-listen 猜的，而是网易云当前听歌足迹接口直接返回。和长期 Top100 派生指标分开呈现。</p></div>
+<div class="grid">
+<div class="stat"><b>{esc((pf.get('monthTopSong') or {}).get('name'))}</b><span>month top song</span><small>{fmt_num((pf.get('monthTopSong') or {}).get('playCount'))} plays</small></div>
+<div class="stat"><b>{esc((pf.get('monthTopArtist') or {}).get('name'))}</b><span>month top artist</span><small>{fmt_num((pf.get('monthTopArtist') or {}).get('playCount'))} plays</small></div>
+<div class="stat"><b>{esc((pf.get('monthTopStyle') or {}).get('genre'))}</b><span>month top style</span><small>{esc((pf.get('monthTopStyle') or {}).get('secondGenre'))}</small></div>
+<div class="stat"><b>{fmt_num(pf.get('monthListenDays'))}</b><span>listening days</span><small>current month · provider observed</small></div>
+</div>
+<div class="three" style="margin-top:16px">
+<div class="panel"><h3>Style preference</h3><p class="sub">网易云曲风偏好接口返回的标签比例。</p>{_fact_rows(pf.get('stylePreferences') or [], 'tagName', 'ratio')}</div>
+<div class="panel"><h3>Language mix</h3><p class="sub">当前月度足迹中的语言结构。</p>{_fact_rows(pf.get('monthLanguageDistribution') or [], 'language', 'percent')}</div>
+<div class="panel"><h3>Music age</h3><p class="sub">当前月度足迹中的发行年代结构。</p>{_fact_rows(pf.get('monthAgeDistribution') or [], 'age', 'playSongNum', ' songs')}</div>
+</div>
+<div class="two" style="margin-top:16px">
+<div class="panel"><h3>Annual footprint</h3><p class="sub">网易云目前返回的历年足迹；展示每年 playNum，不伪造缺失年份。</p>{_fact_rows(pf.get('yearItems') or [], 'year', 'playNum', ' plays')}</div>
+<div class="panel"><h3>Listening rhythm</h3><p class="sub">当前月度六个时段的原生 duration 值，保持网易云原始口径。</p>{_fact_rows(pf.get('monthTimePeriods') or [], 'period', 'duration')}</div>
+</div></section>
 <section class="section" id="taste"><div class="section-head"><div><div class="pill">Taste map</div><h2>偏好不是一个标签</h2></div><p>先展示能稳定从歌曲元数据和行为数据推出的结构；曲风 API 可用时保留原始 provider payload，后续继续做风格层解析。</p></div><div class="three"><div class="panel"><h3>Albums in the record</h3>{_bars(metrics['topAlbums'],'playCount')}</div><div class="panel"><h3>Release decades</h3><p class="sub">按本次可恢复歌曲的发行时间计数。</p>{_decade_bars(metrics['releaseDecades'])}</div><div class="panel"><h3>Hidden favorites</h3><p class="sub">播放很多、但当前红心列表中没有出现的候选，不等于“你其实喜欢”。</p>{_bars(metrics['hiddenFavorites'],'playCount')}</div></div></section>
 <section class="section" id="library"><div class="section-head"><div><div class="pill">Library</div><h2>你的歌单版图</h2></div><p>自建和收藏歌单分开统计；曲目能否恢复取决于歌单权限和接口覆盖。</p></div><div class="two"><div class="panel"><h3>Largest playlists</h3><p class="sub">按 trackCount 排序，收藏歌单标记 subscribed。</p>{_bars(metrics['topPlaylists'],'trackCount',' tracks')}</div><div class="panel"><h3>Library signals</h3>{metric_card('Liked share', f"{idx['likedShareObserved']}%" if idx['likedShareObserved'] is not None else None, '长期排行中，同时存在于当前红心 ID 的歌曲比例。')}{metric_card('Observed liked', s['likedObserved'], '长期排行与当前红心列表的交集数量。','Observed')}</div></div></section>
 <section class="section" id="coverage"><div class="section-head"><div><div class="pill">Evidence layer</div><h2>Data coverage</h2></div><p>Coverage 反映这次同步真正拿到了哪些来源。接口失败、隐私设置或历史不可恢复，都不会被解释成“没有发生”。</p></div><div class="panel coverage"><div class="ring"><b>{cov['score']}%</b></div><div class="caps">{''.join(f'<div class="cap yes">✓ {esc(x)}</div>' for x in cov['available'])}{''.join(f'<div class="cap no">○ {esc(x)}</div>' for x in cov['missing'])}</div></div></section>
