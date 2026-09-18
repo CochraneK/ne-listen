@@ -138,10 +138,7 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     hero_title = f"最近，我一直在听《{month_song}》。" if month_song else "把听过的歌，留成一张长期的音乐地图。"
     nickname = profile.get("nickname") or "Local listener"
 
-    published_meta = json.dumps(
-        {"schemaVersion": data.get("schemaVersion"), "coverage": cov, "collectedAt": collected},
-        ensure_ascii=False,
-    )
+    display_date = str(collected)[:10] if collected else "—"
 
     html_doc = f'''<!doctype html>
 <html lang="zh-CN">
@@ -165,7 +162,7 @@ section{{padding:78px 0;border-top:1px solid var(--line);scroll-margin-top:72px}
 details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}summary{{cursor:pointer;list-style:none;padding:22px 0;font-weight:750}}summary::-webkit-details-marker{{display:none}}summary:after{{content:"＋";float:right;color:var(--muted)}}details[open] summary:after{{content:"－"}}.method{{padding:0 0 26px;color:var(--muted);font-size:12px;line-height:1.75;display:grid;grid-template-columns:1fr 1fr;gap:28px}}.method strong{{color:var(--ink)}}.caps{{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}}.caps span{{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:4px 8px;font-size:10px;color:var(--green)}}.caps .muted{{color:var(--muted)}}.empty{{color:var(--muted);font-size:12px;padding:10px 0}}
 .footer{{padding:40px 0 64px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:24px;color:var(--muted);font-size:11px}}
 @media(max-width:900px){{.now,.playlists{{grid-template-columns:1fr}}.taste{{grid-template-columns:1fr 1fr}}.duo{{gap:24px}}.stats{{grid-template-columns:repeat(2,1fr)}}.stat:nth-child(2){{border-right:0;margin-right:0}}.stat:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.yearstrip{{overflow-x:auto;grid-template-columns:repeat({max(1, year_count)},72px)}}}}
-@media(max-width:650px){{.shell{{width:min(100% - 22px,1120px)}}.hero{{padding:66px 0 54px}}.links a:not(.gh){{display:none}}.sectionhead{{display:block}}.sectionhead p{{margin-top:12px}}.duo,.taste,.patterns,.method{{grid-template-columns:1fr}}.duo{{gap:44px}}.patterns{{border-bottom:0}}.pattern,.pattern:not(:last-child){{border-right:0;border-bottom:1px solid var(--line);padding:20px 0;margin:0}}.stats{{display:grid;grid-template-columns:1fr 1fr}}.stat,.stat:not(:last-child){{margin:0;padding:18px 14px 18px 0}}.stat:nth-child(odd){{border-right:1px solid var(--line)}}.stat b{{font-size:24px}}.feature{{padding:22px}}.footer{{display:block}}.footer span{{display:block;margin-top:8px}}}}
+@media(max-width:650px){{.shell{{width:min(100% - 22px,1120px)}}.hero{{padding:66px 0 54px}}.links a:not(.gh){{display:none}}.sectionhead{{display:block}}.sectionhead p{{margin-top:12px}}.duo,.taste,.patterns,.method{{grid-template-columns:1fr}}.duo{{gap:44px}}.patterns{{border-bottom:0}}.pattern,.pattern:not(:last-child){{border-right:0;border-bottom:1px solid var(--line);padding:20px 0;margin:0}}.stats{{display:grid;grid-template-columns:1fr 1fr}}.stat,.stat:not(:last-child){{margin:0;padding:18px 14px 18px 0}}.stat:nth-child(odd){{border-right:1px solid var(--line)}}.stat b{{font-size:24px}}.feature{{padding:22px}}.yearstrip{{height:auto;overflow:visible;grid-template-columns:repeat(3,1fr);gap:18px 8px}}.year{{height:128px}}.year-bar{{height:86px}}.footer{{display:block}}.footer span{{display:block;margin-top:8px}}}}
 </style>
 </head>
 <body>
@@ -244,7 +241,7 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 </details>
 </div></section>
 </main>
-<footer class="shell footer"><div>ne-listen · personal music archive</div><span>Last snapshot · {esc(collected)}</span><span hidden>{esc(published_meta)}</span></footer>
+<footer class="shell footer"><div>ne-listen · personal music archive</div><span>Last snapshot · {esc(display_date)}</span></footer>
 </body>
 </html>'''
     output.parent.mkdir(parents=True, exist_ok=True)
