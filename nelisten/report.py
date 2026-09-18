@@ -109,6 +109,11 @@ def _year_strip(items: list[dict[str, Any]]) -> str:
     return "".join(cards)
 
 
+def _term_tags(items: list[dict[str, Any]], key: str = "term", limit: int = 12) -> str:
+    terms = [str(item.get(key)) for item in (items or [])[:limit] if item.get(key)]
+    return "".join(f'<span class="term">{esc(term)}</span>' for term in terms) or '<span class="empty">暂无文本结果</span>'
+
+
 def _capability_list(coverage: dict[str, Any]) -> str:
     available = coverage.get("available") or []
     missing = coverage.get("missing") or []
@@ -122,6 +127,7 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     idx = metrics["indices"]
     cov = metrics["coverage"]
     pf = metrics.get("providerFacts") or {}
+    text_metrics = metrics.get("text") or {}
     profile = data.get("profile") or {}
     collected = data.get("collectedAt") or "Unknown"
 
@@ -139,6 +145,21 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     nickname = profile.get("nickname") or "Local listener"
 
     display_date = str(collected)[:10] if collected else "—"
+
+    text_section = ""
+    if text_metrics.get("available"):
+        drift = text_metrics.get("drift") or {}
+        jsd = drift.get("jensenShannon")
+        drift_text = f"{float(jsd):.3f}" if isinstance(jsd, (int, float)) else "—"
+        text_section = f"""
+<section id="lyrics"><div class="shell">
+<div class="sectionhead"><h2>歌词里，也有一张地图。</h2><p>{fmt_num(text_metrics.get('songsWithLyrics'))}/{fmt_num(text_metrics.get('selectedSongs'))} 首歌词进入本次文本分析</p></div>
+<div class="textmap">
+<div><div class="subhead">BEHAVIOR-WEIGHTED TF-IDF</div><div class="termwall">{_term_tags(text_metrics.get('topTerms') or [])}</div></div>
+<div class="textaside"><div class="textfact"><span>近期词汇变化 · JSD</span><b>{drift_text}</b></div><div class="textfact"><span>最近更常出现</span><div class="termwall small">{_term_tags(drift.get('recentRisingTerms') or [], limit=8)}</div></div><div class="textfact"><span>歌词覆盖</span><b>{_percent(text_metrics.get('coverage'))}</b></div></div>
+</div>
+</div></section>
+"""
 
     html_doc = f'''<!doctype html>
 <html lang="zh-CN">
@@ -158,10 +179,10 @@ section{{padding:78px 0;border-top:1px solid var(--line);scroll-margin-top:72px}
 .duo{{display:grid;grid-template-columns:1fr 1fr;gap:46px}}.ranklist{{list-style:none;padding:0;margin:0}}.ranklist li{{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--line)}}.ranklist li:last-child{{border-bottom:0}}.rank{{font-size:10px;color:var(--accent);font-weight:850}}.rank-name{{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.rank-value{{font-size:12px;color:var(--muted)}}.subhead{{font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:800;margin:0 0 8px}}
 .taste{{display:grid;grid-template-columns:repeat(3,1fr);gap:34px}}.taste h3{{font-size:18px;margin:0 0 20px}}.ratio{{margin:15px 0}}.ratio-line{{display:flex;justify-content:space-between;gap:14px;font-size:13px}}.ratio-line b{{font-size:12px;color:var(--muted)}}.hairline{{height:2px;background:#e4dbcf;margin-top:8px;overflow:hidden}}.hairline i{{display:block;height:100%;background:var(--accent)}}.yearstrip{{height:230px;display:grid;grid-template-columns:repeat({max(1, year_count)},minmax(54px,1fr));gap:9px;align-items:end}}.year{{display:grid;grid-template-rows:1fr auto auto;min-width:0;text-align:center;gap:6px;height:100%}}.year-bar{{height:165px;display:flex;align-items:end;justify-content:center;border-bottom:1px solid var(--line)}}.year-bar i{{display:block;width:min(28px,60%);background:var(--accent);border-radius:5px 5px 0 0;opacity:.86}}.year b{{font-size:12px}}.year span{{font-size:10px;color:var(--muted)}}
 .patterns{{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}.pattern{{padding:26px 28px 26px 0}}.pattern:not(:last-child){{border-right:1px solid var(--line);padding-right:28px;margin-right:28px}}.pattern b{{font-size:35px;letter-spacing:-.05em;display:block}}.pattern span{{font-size:13px;font-weight:700}}.pattern p{{font-size:11px;line-height:1.6;color:var(--muted);margin:6px 0 0}}
-.playlists{{display:grid;grid-template-columns:1.1fr .9fr;gap:46px}}.library-note{{font-size:clamp(28px,4vw,44px);line-height:1.08;letter-spacing:-.045em;margin:0 0 18px}}.library-copy{{color:var(--muted);max-width:460px}}.mini-stats{{display:flex;gap:26px;margin-top:28px;flex-wrap:wrap}}.mini-stats b{{font-size:22px;display:block}}.mini-stats span{{font-size:10px;color:var(--muted)}}
+.textmap{{display:grid;grid-template-columns:1.25fr .75fr;gap:46px;align-items:start}}.termwall{{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}}.term{{display:inline-flex;padding:9px 13px;border-radius:999px;background:var(--paper);border:1px solid var(--line);font-size:14px;box-shadow:var(--shadow)}}.termwall.small .term{{font-size:11px;padding:6px 9px;box-shadow:none}}.textaside{{border-left:1px solid var(--line);padding-left:32px}}.textfact{{padding:0 0 20px;margin-bottom:20px;border-bottom:1px solid var(--line)}}.textfact:last-child{{border-bottom:0;margin-bottom:0}}.textfact>span{{display:block;font-size:11px;color:var(--muted);margin-bottom:7px}}.textfact>b{{font-size:30px;letter-spacing:-.04em}}.playlists{{display:grid;grid-template-columns:1.1fr .9fr;gap:46px}}.library-note{{font-size:clamp(28px,4vw,44px);line-height:1.08;letter-spacing:-.045em;margin:0 0 18px}}.library-copy{{color:var(--muted);max-width:460px}}.mini-stats{{display:flex;gap:26px;margin-top:28px;flex-wrap:wrap}}.mini-stats b{{font-size:22px;display:block}}.mini-stats span{{font-size:10px;color:var(--muted)}}
 details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}summary{{cursor:pointer;list-style:none;padding:22px 0;font-weight:750}}summary::-webkit-details-marker{{display:none}}summary:after{{content:"＋";float:right;color:var(--muted)}}details[open] summary:after{{content:"－"}}.method{{padding:0 0 26px;color:var(--muted);font-size:12px;line-height:1.75;display:grid;grid-template-columns:1fr 1fr;gap:28px}}.method strong{{color:var(--ink)}}.caps{{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}}.caps span{{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:4px 8px;font-size:10px;color:var(--green)}}.caps .muted{{color:var(--muted)}}.empty{{color:var(--muted);font-size:12px;padding:10px 0}}
 .footer{{padding:40px 0 64px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:24px;color:var(--muted);font-size:11px}}
-@media(max-width:900px){{.now,.playlists{{grid-template-columns:1fr}}.taste{{grid-template-columns:1fr 1fr}}.duo{{gap:24px}}.stats{{grid-template-columns:repeat(2,1fr)}}.stat:nth-child(2){{border-right:0;margin-right:0}}.stat:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.yearstrip{{overflow-x:auto;grid-template-columns:repeat({max(1, year_count)},72px)}}}}
+@media(max-width:900px){{.now,.playlists,.textmap{{grid-template-columns:1fr}}.textaside{{border-left:0;border-top:1px solid var(--line);padding:24px 0 0}}.taste{{grid-template-columns:1fr 1fr}}.duo{{gap:24px}}.stats{{grid-template-columns:repeat(2,1fr)}}.stat:nth-child(2){{border-right:0;margin-right:0}}.stat:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.yearstrip{{overflow-x:auto;grid-template-columns:repeat({max(1, year_count)},72px)}}}}
 @media(max-width:650px){{.shell{{width:min(100% - 22px,1120px)}}.hero{{padding:66px 0 54px}}.links a:not(.gh){{display:none}}.sectionhead{{display:block}}.sectionhead p{{margin-top:12px}}.duo,.taste,.patterns,.method{{grid-template-columns:1fr}}.duo{{gap:44px}}.patterns{{border-bottom:0}}.pattern,.pattern:not(:last-child){{border-right:0;border-bottom:1px solid var(--line);padding:20px 0;margin:0}}.stats{{display:grid;grid-template-columns:1fr 1fr}}.stat,.stat:not(:last-child){{margin:0;padding:18px 14px 18px 0}}.stat:nth-child(odd){{border-right:1px solid var(--line)}}.stat b{{font-size:24px}}.feature{{padding:22px}}.yearstrip{{height:auto;overflow:visible;grid-template-columns:repeat(3,1fr);gap:18px 8px}}.year{{height:128px}}.year-bar{{height:86px}}.footer{{display:block}}.footer span{{display:block;margin-top:8px}}}}
 </style>
 </head>
@@ -209,6 +230,8 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 </div>
 </div></section>
 
+{text_section}
+
 <section id="years"><div class="shell">
 <div class="sectionhead"><h2>听歌这件事，已经留下了年份。</h2><p>{esc(year_span)}</p></div>
 <div class="yearstrip">{_year_strip(year_items)}</div>
@@ -235,7 +258,7 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 <details>
 <summary>数据说明</summary>
 <div class="method">
-<div><strong>这页是什么</strong><br>网易云直接返回的数据 + ne-listen 的确定性计算。长期排行接口只覆盖 Top100，因此页面不会把榜外历史当作 0，也不会声称恢复了每一次播放。</div>
+<div><strong>这页是什么</strong><br>网易云直接返回的数据 + ne-listen 的确定性计算。歌词文本只在私有构建层处理，公开页不包含歌词原文。长期排行接口只覆盖 Top100，因此页面不会把榜外历史当作 0，也不会声称恢复了每一次播放。</div>
 <div><strong>当前覆盖</strong><br>{fmt_num(cov.get('score'))}% 的 V1 数据能力在本次同步中可用。Cookie、原始 API 响应、normalized archive 和 snapshots 都不会进入公开 Page。<div class="caps">{_capability_list(cov)}</div></div>
 </div>
 </details>

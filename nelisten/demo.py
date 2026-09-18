@@ -32,6 +32,16 @@ def synthetic_normalized() -> dict:
         "records": {"all": records, "week": [], "recent": recent},
         "likedSongIds": ["1","2","3","4","6"],
         "playlists": [{"id":"p1","name":"Night","trackCount":35,"subscribed":False},{"id":"p2","name":"Focus","trackCount":52,"subscribed":False},{"id":"p3","name":"Collected","trackCount":120,"subscribed":True}],
+        "lyrics": {
+            "1": "[00:01.00]夜色落在旧城\n[00:04.00]我记得远方的灯\n[00:08.00]明天沿着街道走",
+            "2": "[00:01.00]city lights above the road\n[00:04.00]we remember another night",
+            "3": "[00:01.00]海风吹过城市\n[00:04.00]你说回忆不会停",
+            "4": "[00:01.00]I walk beyond the silent city\n[00:04.00]tomorrow finds another road",
+            "6": "[00:01.00]天空很远\n[00:04.00]我们还在寻找故乡",
+            "9": "[00:01.00]新的街道新的夜晚\n[00:04.00]明天去更远的地方",
+            "10": "[00:01.00]future city future road\n[00:04.00]we leave before the morning"
+        },
+        "textCorpusMeta": {"selectedSongs": 7, "successfulResponses": 7},
         "providerPayloads": {},
         "capabilities": {"account":True,"profile":True,"record_all":True,"playlists":True,"liked_ids":True,"recent_songs":True,"listen_total":False,"listen_realtime":False,"style_preference":False},
     }
