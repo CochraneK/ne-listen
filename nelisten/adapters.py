@@ -7,7 +7,6 @@ from typing import Any
 from .http import get_json
 
 
-# Read-only endpoints. Missing/unsupported endpoints lower coverage rather than fail the sync.
 READ_ENDPOINTS = {
     "account": ("/user/account", {}),
     "user_level": ("/user/level", {}),
@@ -37,6 +36,7 @@ class CompatibleHttpAdapter:
     timeout: int = 20
     playlist_track_limit: int = 1000
     max_playlists: int = 100
+    max_playlist_pages: int = 20
 
     def _call(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         merged = dict(params)
@@ -68,17 +68,74 @@ class CompatibleHttpAdapter:
         return None
 
     @staticmethod
-    def _playlist_ids(payload: Any) -> list[str]:
+    def _playlist_meta(payload: Any) -> list[dict[str, Any]]:
         if not isinstance(payload, dict):
             return []
         playlists = payload.get("playlist")
         if not isinstance(playlists, list):
             return []
-        ids: list[str] = []
+        out: list[dict[str, Any]] = []
         for item in playlists:
             if isinstance(item, dict) and item.get("id") is not None:
-                ids.append(str(item["id"]))
-        return ids
+                out.append({
+                    "id": str(item["id"]),
+                    "trackCount": int(item.get("trackCount") or 0),
+                })
+        return out
+
+    @staticmethod
+    def _songs_from_playlist_body(body: Any) -> list[Any]:
+        if not isinstance(body, dict):
+            return []
+        songs = body.get("songs")
+        if isinstance(songs, list):
+            return songs
+        data = body.get("data")
+        if isinstance(data, dict) and isinstance(data.get("songs"), list):
+            return data["songs"]
+        return []
+
+    def _collect_playlist_tracks(self, playlist_id: str, expected: int) -> dict[str, Any]:
+        pages: list[Any] = []
+        merged_songs: list[Any] = []
+        last_status: int | None = None
+        error: str | None = None
+
+        for page_index in range(self.max_playlist_pages):
+            offset = page_index * self.playlist_track_limit
+            response = self._call(
+                "/playlist/track/all",
+                {"id": playlist_id, "limit": self.playlist_track_limit, "offset": offset},
+            )
+            last_status = response.get("status")
+            if not response.get("ok"):
+                error = response.get("error")
+                break
+
+            body = response.get("data")
+            pages.append(body)
+            page_songs = self._songs_from_playlist_body(body)
+            merged_songs.extend(page_songs)
+
+            if not page_songs:
+                break
+            if expected and len(merged_songs) >= expected:
+                break
+            if len(page_songs) < self.playlist_track_limit:
+                break
+
+        return {
+            "ok": bool(pages),
+            "status": last_status,
+            "data": {
+                "pages": pages,
+                "songs": merged_songs,
+                "expectedTrackCount": expected,
+                "fetchedTrackCount": len(merged_songs),
+            },
+            "error": error,
+            "path": "/playlist/track/all",
+        }
 
     def collect(self, uid: str | None = None) -> dict[str, Any]:
         collected_at = datetime.now(timezone.utc).isoformat()
@@ -107,15 +164,14 @@ class CompatibleHttpAdapter:
                 params["uid"] = resolved_uid
             responses[key] = self._call(path, params)
 
-        # Enrich playlist membership. Each playlist is isolated so one private/deleted
-        # playlist cannot break the rest of the archive.
         playlist_tracks: dict[str, Any] = {}
         playlist_payload = responses.get("playlists", {}).get("data")
-        for playlist_id in self._playlist_ids(playlist_payload)[: self.max_playlists]:
-            playlist_tracks[playlist_id] = self._call(
-                "/playlist/track/all",
-                {"id": playlist_id, "limit": self.playlist_track_limit, "offset": 0},
+        for item in self._playlist_meta(playlist_payload)[: self.max_playlists]:
+            playlist_tracks[item["id"]] = self._collect_playlist_tracks(
+                item["id"],
+                item["trackCount"],
             )
+
         responses["playlist_tracks"] = {
             "ok": bool(playlist_tracks),
             "status": 200 if playlist_tracks else None,

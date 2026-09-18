@@ -18,15 +18,26 @@ def _first_dict(*values: Any) -> dict[str, Any]:
 def _song_from_obj(obj: Any) -> dict[str, Any] | None:
     if not isinstance(obj, dict):
         return None
-    song = obj.get("song") if isinstance(obj.get("song"), dict) else obj
+
+    if isinstance(obj.get("song"), dict):
+        song = obj["song"]
+    elif isinstance(obj.get("data"), dict) and obj["data"].get("id") is not None:
+        song = obj["data"]
+    elif isinstance(obj.get("resource"), dict) and obj["resource"].get("id") is not None:
+        song = obj["resource"]
+    else:
+        song = obj
+
     sid = song.get("id")
     if sid is None:
         return None
+
     artists_raw = song.get("ar") or song.get("artists") or []
     artists = []
     for artist in artists_raw if isinstance(artists_raw, list) else []:
         if isinstance(artist, dict):
             artists.append({"id": artist.get("id"), "name": artist.get("name") or "Unknown"})
+
     album_raw = _first_dict(song.get("al"), song.get("album"))
     return {
         "id": str(sid),
@@ -59,19 +70,26 @@ def _record_list(payload: Any, key: str) -> list[dict[str, Any]]:
 def _recent_list(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
+
     candidates: Iterable[Any] = []
     data = payload.get("data")
     if isinstance(data, dict):
-        candidates = data.get("list") or data.get("songs") or []
+        candidates = data.get("list") or data.get("songs") or data.get("resources") or []
     elif isinstance(data, list):
         candidates = data
     elif isinstance(payload.get("songs"), list):
         candidates = payload["songs"]
+    elif isinstance(payload.get("list"), list):
+        candidates = payload["list"]
+
     out = []
     for item in candidates:
         song = _song_from_obj(item)
         if song:
-            out.append({"song": song, "playedAt": item.get("playTime") if isinstance(item, dict) else None})
+            played_at = None
+            if isinstance(item, dict):
+                played_at = item.get("playTime") or item.get("playedAt") or item.get("time")
+            out.append({"song": song, "playedAt": played_at})
     return out
 
 
@@ -87,23 +105,31 @@ def _extract_liked(payload: Any) -> list[str]:
 def _extract_playlists(payload: Any, tracks_payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict) or not isinstance(payload.get("playlist"), list):
         return []
+
     tracks_by_id = tracks_payload if isinstance(tracks_payload, dict) else {}
     result = []
+
     for p in payload["playlist"]:
         if not isinstance(p, dict):
             continue
         pid = str(p.get("id")) if p.get("id") is not None else None
         track_response = tracks_by_id.get(pid, {}) if pid else {}
         body = track_response.get("data") if isinstance(track_response, dict) and track_response.get("ok") else None
+
         candidates = []
         if isinstance(body, dict):
-            candidates = body.get("songs") or (body.get("data") or {}).get("songs") if isinstance(body.get("data"), dict) else body.get("songs") or []
+            if isinstance(body.get("songs"), list):
+                candidates = body["songs"]
+            elif isinstance(body.get("data"), dict) and isinstance(body["data"].get("songs"), list):
+                candidates = body["data"]["songs"]
+
         tracks = []
         if isinstance(candidates, list):
             for item in candidates:
                 song = _song_from_obj(item)
                 if song:
                     tracks.append(song)
+
         result.append({
             "id": pid,
             "name": p.get("name") or "Untitled",
@@ -113,7 +139,9 @@ def _extract_playlists(payload: Any, tracks_payload: Any) -> list[dict[str, Any]
             "createTime": p.get("createTime"),
             "updateTime": p.get("updateTime"),
             "tracks": tracks,
+            "fetchedTrackCount": len(tracks),
         })
+
     return result
 
 
@@ -122,10 +150,13 @@ def _extract_profile(raw: dict[str, Any]) -> dict[str, Any]:
     account_payload = _response(raw, "account")
     profile = {}
     root = profile_payload if isinstance(profile_payload, dict) else {}
+
     if root:
         profile = _first_dict(root.get("profile"), root.get("data"), root)
+
     if not profile and isinstance(account_payload, dict):
         profile = _first_dict(account_payload.get("profile"), account_payload.get("account"))
+
     return {
         "userId": str(profile.get("userId") or raw.get("uid") or "") or None,
         "nickname": profile.get("nickname"),
@@ -137,16 +168,18 @@ def _extract_profile(raw: dict[str, Any]) -> dict[str, Any]:
         "listenSongs": root.get("listenSongs") if root else None,
         "level": root.get("level") if root else None,
         "createDays": root.get("createDays") if root else None,
-        "createTime": profile.get("createTime") or root.get("createTime") if root else profile.get("createTime"),
+        "createTime": profile.get("createTime") or (root.get("createTime") if root else None),
     }
 
 
 def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     record_payload = _response(raw, "record_all")
     week_payload = _response(raw, "record_week")
+
     all_records = _record_list(record_payload, "allData")
     if not all_records:
         all_records = _record_list(record_payload, "weekData")
+
     week_records = _record_list(week_payload, "weekData")
     recent = _recent_list(_response(raw, "recent_songs"))
     liked_ids = _extract_liked(_response(raw, "liked_ids"))
@@ -159,8 +192,10 @@ def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     song_index: dict[str, dict[str, Any]] = {}
     for record in all_records + week_records:
         song_index[record["song"]["id"]] = record["song"]
+
     for item in recent:
         song_index[item["song"]["id"]] = item["song"]
+
     for playlist in playlists:
         for song in playlist.get("tracks") or []:
             song_index[song["id"]] = song
