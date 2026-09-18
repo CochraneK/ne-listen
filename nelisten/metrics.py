@@ -91,6 +91,19 @@ def _provider_facts(payloads: dict[str, Any]) -> dict[str, Any]:
         data = root.get("data")
         return data if isinstance(data, dict) else {}
 
+    def block(root: dict[str, Any], name: str) -> dict[str, Any]:
+        value = root.get(name)
+        return value if isinstance(value, dict) else {}
+
+    def selected(items: Any, keys: tuple[str, ...]) -> list[dict[str, Any]]:
+        if not isinstance(items, list):
+            return []
+        out = []
+        for item in items:
+            if isinstance(item, dict):
+                out.append({key: item.get(key) for key in keys})
+        return out
+
     total = body("listenTotal")
     week_rt = body("listenRealtimeWeek")
     month_rt = body("listenRealtimeMonth")
@@ -98,10 +111,6 @@ def _provider_facts(payloads: dict[str, Any]) -> dict[str, Any]:
     month_report = body("listenReportMonth")
     year = body("listenYear")
     style = body("stylePreference")
-
-    def block(root: dict[str, Any], name: str) -> dict[str, Any]:
-        value = root.get(name)
-        return value if isinstance(value, dict) else {}
 
     week_dist = block(week_rt, "listenTimeDistributionBlock")
     month_dist = block(month_rt, "listenTimeDistributionBlock")
@@ -111,15 +120,22 @@ def _provider_facts(payloads: dict[str, Any]) -> dict[str, Any]:
     month_top_artist = block(month_report, "topArtistBlock")
     month_top_style = block(month_report, "topStyleBlock")
     month_top_age = block(month_report, "topAgeBlock")
+    month_top_language = block(month_report, "topLanguageBlock")
 
     return {
         "totalDurationRaw": total.get("totalDuration"),
         "weekPlayDurationRaw": week_dist.get("playDuration"),
         "weekListenDays": week_dist.get("listenDays"),
-        "weekPlayDurationText": week_time.get("playDurationText"),
+        "weekAchievement": block(week_dist, "achievementTitle"),
+        "weekDistributionSections": selected(week_dist.get("sections"), ("type", "value")),
+        "weekListenSections": selected(week_time.get("sections"), ("field", "valueA", "textB", "type")),
+        "weekTimePeriods": selected(week_time.get("circleTimePeriodDurations"), ("period", "duration")),
         "monthPlayDurationRaw": month_dist.get("playDuration"),
         "monthListenDays": month_dist.get("listenDays"),
-        "monthPlayDurationText": month_time.get("playDurationText"),
+        "monthAchievement": block(month_dist, "achievementTitle"),
+        "monthDistributionSections": selected(month_dist.get("sections"), ("type", "value")),
+        "monthListenSections": selected(month_time.get("sections"), ("field", "valueA", "textB", "type")),
+        "monthTimePeriods": selected(month_time.get("circleTimePeriodDurations"), ("period", "duration")),
         "monthTopSong": {
             "name": month_top_song.get("songName"),
             "playCount": month_top_song.get("playCount"),
@@ -132,13 +148,13 @@ def _provider_facts(payloads: dict[str, Any]) -> dict[str, Any]:
             "genre": month_top_style.get("genreName"),
             "secondGenre": month_top_style.get("secondGenreName"),
         },
-        "monthTopAge": month_top_age.get("age"),
+        "monthStyleDistribution": selected(month_top_style.get("sections"), ("genreName", "percent")),
+        "monthAgeDistribution": selected(month_top_age.get("sections"), ("age", "playSongNum")),
+        "monthLanguageDistribution": selected(month_top_language.get("sections"), ("language", "percent", "playSongNum")),
         "displayYear": year.get("displayYear"),
-        "yearItemCount": len(year.get("yearItems") or []) if isinstance(year.get("yearItems"), list) else 0,
-        "styleTagCount": len(style.get("tags") or []) if isinstance(style.get("tags"), list) else 0,
+        "yearItems": selected(year.get("yearItems"), ("year", "playDuration", "playNum")),
+        "stylePreferences": selected(style.get("tagPreferenceVos"), ("tagId", "tagName", "ratio")),
     }
-
-
 def analyze(data: dict[str, Any]) -> dict[str, Any]:
     records = (data.get("records") or {}).get("all") or []
     week_records = (data.get("records") or {}).get("week") or []
