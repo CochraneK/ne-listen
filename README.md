@@ -57,9 +57,9 @@ GitHub Secret
 ### 当前报告章节
 
 - 生涯概览：已知播放、长期排行歌曲、红心数、歌单数、账户等级 / listenSongs；
-- How you listen：Repeat Index、Artist Loyalty、Taste Diversity、Exploration Proxy；
+- How you listen：Repeat Index、Artist Loyalty、Taste Diversity、Recent outside Top100；
 - 长期偏好：Top songs / artists / albums；
-- Current rotation：本周歌曲与歌手；
+- Current rotation：本周歌曲与歌手，以及最近播放是否落在长期 Top100；
 - Taste map：发行年代、Hidden Favorites；
 - Library：自建 / 收藏歌单、歌单曲目覆盖；
 - Data coverage：明确哪些网易云来源本次真正拿到了。

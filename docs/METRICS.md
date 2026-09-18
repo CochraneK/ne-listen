@@ -18,11 +18,11 @@ Share of known plays accounted for by the top 10% of observed artists. Multi-art
 
 Effective number of artists: `exp(Shannon entropy)` over the observed artist play distribution.
 
-## Exploration Proxy
+## Recent outside Top100 share
 
-Among recent songs available from the provider, the fraction whose historical observed play count is at most 2.
+Among recent-play records available from the provider, the fraction whose song IDs are absent from the provider's all-time Top100 ranking.
 
-This is a proxy, not a full novelty score.
+This is **not** a novelty rate and does not imply those songs were historically rare. Absence from Top100 means historical count is unknown outside the ranking boundary. This metric deliberately preserves `unknown != 0`.
 
 ## Hidden Favorites
 

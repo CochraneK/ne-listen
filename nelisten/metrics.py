@@ -194,8 +194,8 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
 
     recent_records = (data.get("records") or {}).get("recent") or []
     recent_ids = [str((x.get("song") or {}).get("id")) for x in recent_records]
-    low_history_recent = sum(1 for sid in recent_ids if play_by_song.get(sid, 0) <= 2)
-    exploration_proxy = (low_history_recent / len(recent_ids)) if recent_ids else None
+    recent_outside_top100 = sum(1 for sid in recent_ids if sid not in play_by_song)
+    recent_outside_top100_share = (recent_outside_top100 / len(recent_ids)) if recent_ids else None
 
     hidden = [
         {"id": sid, "name": name_by_song.get(sid, sid), "playCount": count}
@@ -263,7 +263,7 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
             "repeatIndex": _pct(repeat_share),
             "artistLoyalty": _pct(artist_share),
             "tasteDiversityEffectiveArtists": round(diversity, 1) if diversity is not None else None,
-            "explorationProxy": _pct(exploration_proxy),
+            "recentOutsideTop100": _pct(recent_outside_top100_share),
             "likedShareObserved": _pct(liked_observed / len(observed_song_ids)) if observed_song_ids else None,
         },
         "topSongs": [

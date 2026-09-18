@@ -112,7 +112,7 @@ a{{color:inherit}} .shell{{max-width:1180px;margin:auto;padding:28px 22px 80px}}
 {metric_card('Repeat Index', f"{idx['repeatIndex']}%" if idx['repeatIndex'] is not None else None, 'Top 10% 歌曲占已知播放量的比例。')}
 {metric_card('Artist Loyalty', f"{idx['artistLoyalty']}%" if idx['artistLoyalty'] is not None else None, 'Top 10% 歌手占已知播放量的比例。')}
 {metric_card('Taste Diversity', idx['tasteDiversityEffectiveArtists'], '基于 Shannon entropy 的有效歌手数量。')}
-{metric_card('Exploration Proxy', f"{idx['explorationProxy']}%" if idx['explorationProxy'] is not None else None, '最近播放中，历史播放≤2次歌曲的比例。')}
+{metric_card('Recent outside Top100', f"{idx['recentOutsideTop100']}%" if idx['recentOutsideTop100'] is not None else None, '最近播放中不属于网易云长期 Top100 的比例；它不是“新歌率”，也不把未知历史当作 0。')}
 </div></section>
 <section class="section two"><div class="panel"><h3>Most played songs</h3><p class="sub">当前“所有时间排行”接口能观测到的高频歌曲。</p>{_bars(metrics['topSongs'],'playCount')}</div><div class="panel"><h3>Artists you return to</h3><p class="sub">多歌手歌曲按歌手平分一次播放权重。</p>{_bars(metrics['topArtists'],'playCount')}</div></section>
 <section class="section" id="now"><div class="section-head"><div><div class="pill">Current rotation</div><h2>最近这一周，你在回到什么</h2></div><p>把长期偏好和短期循环分开看，避免把“这周突然上头”误当作长期口味。</p></div><div class="two"><div class="panel"><h3>Week songs</h3>{_bars(metrics['weekSongs'],'playCount')}</div><div class="panel"><h3>Week artists</h3>{_bars(metrics['weekArtists'],'playCount')}</div></div></section>
@@ -120,7 +120,7 @@ a{{color:inherit}} .shell{{max-width:1180px;margin:auto;padding:28px 22px 80px}}
 <div class="grid">
 <div class="stat"><b>{esc((pf.get('monthTopSong') or {}).get('name'))}</b><span>month top song</span><small>{fmt_num((pf.get('monthTopSong') or {}).get('playCount'))} plays</small></div>
 <div class="stat"><b>{esc((pf.get('monthTopArtist') or {}).get('name'))}</b><span>month top artist</span><small>{fmt_num((pf.get('monthTopArtist') or {}).get('playCount'))} plays</small></div>
-<div class="stat"><b>{esc((pf.get('monthTopStyle') or {}).get('genre'))}</b><span>month top style</span><small>{esc((pf.get('monthTopStyle') or {}).get('secondGenre'))}</small></div>
+<div class="stat"><b>{esc((pf.get('monthTopStyle') or {}).get('genre'))}</b><span>highlighted style</span><small>网易云突出显示 · {esc((pf.get('monthTopStyle') or {}).get('secondGenre'))}</small></div>
 <div class="stat"><b>{fmt_num(pf.get('monthListenDays'))}</b><span>listening days</span><small>current month · provider observed</small></div>
 </div>
 <div class="three" style="margin-top:16px">
@@ -129,7 +129,7 @@ a{{color:inherit}} .shell{{max-width:1180px;margin:auto;padding:28px 22px 80px}}
 <div class="panel"><h3>Music age</h3><p class="sub">当前月度足迹中的发行年代结构。</p>{_fact_rows(pf.get('monthAgeDistribution') or [], 'age', 'playSongNum', ' songs')}</div>
 </div>
 <div class="two" style="margin-top:16px">
-<div class="panel"><h3>Annual footprint</h3><p class="sub">网易云目前返回的历年足迹；展示每年 playNum，不伪造缺失年份。</p>{_fact_rows(pf.get('yearItems') or [], 'year', 'playNum', ' plays')}</div>
+<div class="panel"><h3>Annual footprint</h3><p class="sub">网易云目前返回的历年足迹；展示每年 playNum，不伪造缺失年份。</p>{_fact_rows(pf.get('yearItems') or [], 'year', 'playNum', ' · provider playNum')}</div>
 <div class="panel"><h3>Listening rhythm</h3><p class="sub">当前月度六个时段的原生 duration 值，保持网易云原始口径。</p>{_fact_rows(pf.get('monthTimePeriods') or [], 'period', 'duration')}</div>
 </div></section>
 <section class="section" id="taste"><div class="section-head"><div><div class="pill">Taste map</div><h2>偏好不是一个标签</h2></div><p>先展示能稳定从歌曲元数据和行为数据推出的结构；曲风 API 可用时保留原始 provider payload，后续继续做风格层解析。</p></div><div class="three"><div class="panel"><h3>Albums in the record</h3>{_bars(metrics['topAlbums'],'playCount')}</div><div class="panel"><h3>Release decades</h3><p class="sub">按本次可恢复歌曲的发行时间计数。</p>{_decade_bars(metrics['releaseDecades'])}</div><div class="panel"><h3>Hidden favorites</h3><p class="sub">播放很多、但当前红心列表中没有出现的候选，不等于“你其实喜欢”。</p>{_bars(metrics['hiddenFavorites'],'playCount')}</div></div></section>
