@@ -171,7 +171,7 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
 <section id="lyrics"><div class="shell">
 <div class="sectionhead"><h2>歌词里，也有一张地图。</h2><p>{fmt_num(text_metrics.get('songsWithLyrics'))}/{fmt_num(text_metrics.get('selectedSongs'))} 首歌词进入本次文本分析</p></div>
 <div class="textmap">
-<div><div class="subhead">BEHAVIOR-WEIGHTED TF-IDF</div><div class="termwall">{_term_tags(text_metrics.get('topTerms') or [])}</div><div class="subhead text-sub">STABLE NMF THEMES</div><div class="topiclist">{topic_html or '<div class="empty">深度主题层未启用</div>'}</div></div>
+<div><div class="subhead">BEHAVIOR-WEIGHTED TF-IDF</div><div class="termwall">{_term_tags(text_metrics.get('topTerms') or [])}</div><div class="subhead text-sub">EXPLORATORY NMF THEMES</div><div class="topiclist">{topic_html or '<div class="empty">深度主题层未启用</div>'}</div></div>
 <div class="textaside"><div class="textfact"><span>词汇分布差异 · JSD</span><b>{drift_text}</b></div><div class="textfact"><span>潜在语义距离 · LSA</span><b>{semantic_text}</b></div><div class="textfact"><span>NMF ↔ LSA/KMeans 一致性 · AMI</span><b>{agreement_text}</b></div><div class="textfact"><span>最近更常出现</span><div class="termwall small">{_term_tags(drift.get('recentRisingTerms') or [], limit=8)}</div></div></div>
 </div>
 </div></section>
@@ -274,7 +274,7 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 <details>
 <summary>数据说明</summary>
 <div class="method">
-<div><strong>这页是什么</strong><br>网易云直接返回的数据 + ne-listen 的确定性计算。歌词文本只在私有构建层处理，公开页不包含歌词原文；NMF/LSA 只发布聚合主题和距离。长期排行接口只覆盖 Top100，因此页面不会把榜外历史当作 0，也不会声称恢复了每一次播放。</div>
+<div><strong>这页是什么</strong><br>网易云直接返回的数据 + ne-listen 的确定性计算。歌词文本只在私有构建层处理，公开页不包含歌词原文；NMF/LSA 只发布聚合主题和距离；当前 NMF 与 LSA/KMeans 的 AMI 会直接展示，用来提醒主题的一致性有限。长期排行接口只覆盖 Top100，因此页面不会把榜外历史当作 0，也不会声称恢复了每一次播放。</div>
 <div><strong>当前覆盖</strong><br>{fmt_num(cov.get('score'))}% 的 V1 数据能力在本次同步中可用。Cookie、原始 API 响应、normalized archive 和 snapshots 都不会进入公开 Page。<div class="caps">{_capability_list(cov)}</div></div>
 </div>
 </details>

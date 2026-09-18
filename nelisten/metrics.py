@@ -213,6 +213,36 @@ def _playlist_network(playlists: list[dict[str, Any]]) -> dict[str, Any]:
                 })
     pairs.sort(key=lambda item: (item["jaccard"], item["intersection"]), reverse=True)
 
+    weighted_degree: Counter[str] = Counter()
+    adjacency: dict[str, set[str]] = {pid: set() for pid in ids}
+    for pair in pairs:
+        a_id = next((pid for pid, name in names.items() if name == pair["a"]), None)
+        b_id = next((pid for pid, name in names.items() if name == pair["b"]), None)
+        if a_id and b_id:
+            weighted_degree[a_id] += pair["jaccard"]
+            weighted_degree[b_id] += pair["jaccard"]
+            if pair["jaccard"] >= 3.0:
+                adjacency[a_id].add(b_id)
+                adjacency[b_id].add(a_id)
+
+    components = []
+    seen: set[str] = set()
+    for pid in ids:
+        if pid in seen or not adjacency.get(pid):
+            continue
+        stack = [pid]
+        component = []
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            component.append(current)
+            stack.extend(adjacency.get(current, set()) - seen)
+        if len(component) >= 2:
+            components.append([names[x] for x in component])
+    components.sort(key=len, reverse=True)
+
     bridge_artists = [
         {
             "name": artist_names[aid],
@@ -232,6 +262,11 @@ def _playlist_network(playlists: list[dict[str, Any]]) -> dict[str, Any]:
         "songsInMultiplePlaylists": multi,
         "multiPlaylistShare": round(multi / len(song_membership) * 100, 1) if song_membership else None,
         "topOverlaps": pairs[:10],
+        "topConnectedPlaylists": [
+            {"name": names[pid], "weightedDegree": round(score, 1)}
+            for pid, score in weighted_degree.most_common(8)
+        ],
+        "componentsAt3Percent": components[:8],
         "bridgeArtists": bridge_artists[:12],
     }
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from .adapters import CompatibleHttpAdapter
 from .demo import synthetic_normalized
 from .doctor import inspect
+from .history import merge_history
 from .io import read_json, write_json
 from .metrics import analyze
 from .normalize import normalize
@@ -22,9 +23,15 @@ def _data_dir(value: str | None) -> Path:
 
 def build_report(normalized: dict, data_dir: Path) -> Path:
     metrics = analyze(normalized)
-    out = data_dir / "report" / "index.html"
+    report_dir = data_dir / "report"
+    previous_path = report_dir / "history.previous.json"
+    previous = read_json(previous_path) if previous_path.exists() else {}
+    history = merge_history(previous, metrics, normalized.get("collectedAt"))
+    metrics["history"] = history
+    out = report_dir / "index.html"
     render(normalized, metrics, out)
-    write_json(data_dir / "report" / "metrics.json", metrics)
+    write_json(report_dir / "metrics.json", metrics)
+    write_json(report_dir / "history.json", history)
     return out
 
 

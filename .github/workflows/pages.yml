@@ -48,11 +48,14 @@ jobs:
           done
           curl -fsS http://127.0.0.1:3000/ >/dev/null
           export NELISTEN_COOKIE="MUSIC_U=${MUSIC_U_VALUE}"
+          mkdir -p "$NELISTEN_DATA_DIR/report"
+          curl -fsS https://cochranek.github.io/ne-listen/history.json -o "$NELISTEN_DATA_DIR/report/history.previous.json" || true
           python -m nelisten sync --base-url http://127.0.0.1:3000 --data-dir "$NELISTEN_DATA_DIR"
           python -m nelisten doctor --data-dir "$NELISTEN_DATA_DIR"
           mkdir -p _site
           cp "$NELISTEN_DATA_DIR/report/index.html" _site/index.html
           cp "$NELISTEN_DATA_DIR/report/metrics.json" _site/metrics.json
+          cp "$NELISTEN_DATA_DIR/report/history.json" _site/history.json
       - name: Build synthetic demo when no secret is configured
         if: env.MUSIC_U_VALUE == ''
         run: |
@@ -60,6 +63,7 @@ jobs:
           mkdir -p _site
           cp build/demo/report/index.html _site/index.html
           cp build/demo/report/metrics.json _site/metrics.json
+          cp build/demo/report/history.json _site/history.json
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

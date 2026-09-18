@@ -17,7 +17,7 @@
 1. **原始事实优先**：API 返回内容原样归档，标准化数据另存。
 2. **unknown ≠ 0**：接口没给出的历史，不会被当成“没有发生”。
 3. **Observed / Derived / Estimated 分层**：报告告诉你每个指标从哪来。
-4. **Snapshot-first**：每次同步都保存快照，越用越像自己的长期音乐数据库。
+4. **Snapshot-first**：本地同步保存完整私有快照；GitHub Actions 的私有工作目录是临时的，因此公开 Page 额外持久化一份不含原始歌词/播放明细的 **聚合历史 history.json**，用于后续纵向变化。
 5. **Adapter 可替换**：不把项目绑定到某一个逆向 API 实现。
 6. **隐私默认安全**：Cookie、raw、snapshot 不进 Git；公开 Page 只发布派生报告。
 

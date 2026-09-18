@@ -11,7 +11,11 @@
 - ✅ Provider-native footprint layer added: week/month listening blocks, style preference, language, music-age, annual footprint.
 - ✅ Long-term provider ranking kept explicitly bounded to Top100.
 - ✅ `unknown != 0` audit fixed: removed the misleading exploration proxy and replaced it with Recent outside Top100 share.
-- ✅ CI passes on Python 3.10 and 3.13.\n- ✅ 2026-09-18 visitor-first UI refactor: WeRead-family visual language, fewer primary metrics, methodology collapsed, desktop/mobile screenshot review.
+- ✅ CI passes on Python 3.10 and 3.13.
+- ✅ Lyric text mining: bounded private corpus, TF-IDF, linguistic fields and lexical JSD.
+- ✅ Deep text layer: NMF + LSA + KMeans + AMI reliability check.
+- ✅ Playlist network: Jaccard overlap, connected components and bridge artists.
+- ✅ Public-safe aggregate history persists across GitHub Pages deployments; raw CI snapshots remain ephemeral.\n- ✅ 2026-09-18 visitor-first UI refactor: WeRead-family visual language, fewer primary metrics, methodology collapsed, desktop/mobile screenshot review.
 
 ## Current public report
 

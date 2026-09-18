@@ -21,7 +21,9 @@ _CYRILLIC_RE = re.compile(r"[\u0400-\u04ff]")
 _CREDIT_PREFIXES = (
     "作词", "作曲", "编曲", "制作", "制作人", "混音", "录音", "和声", "吉他", "贝斯",
     "鼓", "母带", "监制", "词：", "曲：", "词:", "曲:", "lyrics by", "composed by",
-    "written by", "producer", "produced by",
+    "written by", "producer", "produced by", "vocal", "vocals", "arranger", "composer",
+    "lyricist", "mastering", "recording", "mix", "mixed by", "演唱", "企划", "出品", "发行",
+    "策划", "统筹", "宣传", "文案", "版权", "封面", "录音室", "混音室", "op:", "sp:",
 )
 
 _EN_STOP = {
@@ -30,15 +32,20 @@ _EN_STOP = {
     "one","two","get","got","let","too","yeah","oh","ooh","ah","la","na","im","i'm","dont","don't",
     "me","my","we","us","it","is","in","on","to","of","a","an","i","be","so","if","as","at",
     "her","hers","him","his","them","their","theirs","there","here","then","up","down","only",
-    "even","still","now","gonna","wanna","gotta","baby",
+    "even","still","now","gonna","wanna","gotta","baby","know","say","come","make","want",
+    "der","die","das","und","ich","du","er","sie","es","wir","ihr","den","dem","des","ein","eine",
+    "mit","von","zu","im","auf","fur","für","ist","sind","war","sein","nicht","mein","dein","mich","dich",
+    "le","la","les","de","des","du","un","une","et","je","tu","il","elle","nous","vous","ils","elles",
+    "mon","ma","mes","ton","ta","tes","son","sa","ses","est","sont","pas","pour","avec","dans","sur",
 }
 
-_TERM_BLOCKLIST = {"纯音乐", "欣赏", "every"}
+_TERM_BLOCKLIST = {"纯音乐", "欣赏", "every", "vocal", "vocals", "版权", "音乐", "文化", "封面设计", "op", "sp"}
 
 _ZH_STOP = {
     "我们","你们","他们","她们","一个","这样","那么","什么","怎么","还是","只是","不是","没有",
     "可以","因为","所以","已经","如果","时候","这里","那里","自己","然后","真的","知道","就是",
     "我的","你的","他的","她的","这个","那个","不会","不要","不能","一起","一直","还有","为了",
+    "只有","有些","一切","所有","多么","多少","才能","是否","为什么","那些","每个",
 }
 
 _FIELDS = {
@@ -120,7 +127,7 @@ def tokenize(text: str) -> list[str]:
                         tokens.append(token)
             else:
                 tokens.extend(_fallback_cjk_tokens(segment))
-    return tokens
+    return [token for token in tokens if token not in _TERM_BLOCKLIST]
 
 
 def select_text_corpus_song_ids(data: dict[str, Any], max_songs: int = 180) -> list[str]:
