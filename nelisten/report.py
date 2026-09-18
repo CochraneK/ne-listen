@@ -16,54 +16,89 @@ def fmt_num(value: Any) -> str:
     return "—"
 
 
-def _bars(items: list[dict[str, Any]], value_key: str, suffix: str = "") -> str:
-    if not items:
-        return '<div class="empty">No observed data yet.</div>'
-    max_v = max(float(x.get(value_key) or 0) for x in items) or 1
+def _percent(value: Any) -> str:
+    if not isinstance(value, (int, float)):
+        return "—"
+    v = float(value)
+    if 0 <= v <= 1:
+        v *= 100
+    return f"{v:.0f}%" if v.is_integer() else f"{v:.1f}%"
+
+
+def _ranked(items: list[dict[str, Any]], value_key: str, limit: int = 6, suffix: str = "") -> str:
     rows = []
-    for i, item in enumerate(items, 1):
-        v = float(item.get(value_key) or 0)
-        width = max(2, v / max_v * 100)
-        liked = " ♥" if item.get("liked") else ""
-        note = " · subscribed" if item.get("subscribed") else ""
+    for i, item in enumerate((items or [])[:limit], 1):
         rows.append(
-            f'''<div class="bar-row"><div class="rank">{i:02d}</div><div class="bar-main"><div class="bar-label"><span>{esc(item.get("name"))}{liked}{note}</span><b>{esc(fmt_num(v))}{suffix}</b></div><div class="track"><div class="fill" style="width:{width:.1f}%"></div></div></div></div>'''
+            f'<li><span class="rank">{i:02d}</span><span class="rank-name">{esc(item.get("name"))}</span>'
+            f'<span class="rank-value">{esc(fmt_num(item.get(value_key)))}{suffix}</span></li>'
         )
-    return "".join(rows)
+    return "".join(rows) or '<li class="empty">暂无数据</li>'
 
 
-def _decade_bars(items: list[dict[str, Any]]) -> str:
-    adapted = [{"name": x.get("name"), "count": x.get("count")} for x in items]
-    return _bars(adapted, "count")
-
-
-def _fact_rows(items: list[dict[str, Any]], label_key: str, value_key: str, suffix: str = "") -> str:
-    rows = []
-    for item in items or []:
-        label = item.get(label_key)
-        value = item.get(value_key)
-        if label is None or value is None:
+def _ratio_rows(items: list[dict[str, Any]], label_key: str, value_key: str, limit: int = 6) -> str:
+    valid = []
+    for item in (items or [])[:limit]:
+        label, value = item.get(label_key), item.get(value_key)
+        if label is None or not isinstance(value, (int, float)):
             continue
-        rows.append(f'<div class="fact-row"><span>{esc(label)}</span><b>{esc(value)}{suffix}</b></div>')
-    return "".join(rows) or '<div class="empty">No observed data yet.</div>'
-
-
-def _provider_badges(data: dict[str, Any]) -> str:
-    caps = data.get("capabilities") or {}
-    groups = [
-        ("长期排行", ["record_all"]),
-        ("本周排行", ["record_week"]),
-        ("最近播放", ["recent_songs", "recent_listen"]),
-        ("听歌时长", ["listen_total", "listen_realtime_week", "listen_realtime_month"]),
-        ("年度足迹", ["listen_year", "listen_report_year"]),
-        ("曲风偏好", ["style_preference"]),
-        ("歌单曲目", ["playlist_tracks"]),
-    ]
+        numeric = float(value) * 100 if 0 <= float(value) <= 1 else float(value)
+        valid.append((str(label), numeric))
+    if not valid:
+        return '<div class="empty">暂无数据</div>'
+    max_value = max(v for _, v in valid) or 1
     out = []
-    for label, keys in groups:
-        ok = any(caps.get(k) for k in keys)
-        out.append(f'<span class="source {"on" if ok else "off"}">{"●" if ok else "○"} {esc(label)}</span>')
+    for label, value in valid:
+        width = max(4, value / max_value * 100)
+        shown = f"{value:.0f}%" if value.is_integer() else f"{value:.1f}%"
+        out.append(
+            f'<div class="ratio"><div class="ratio-line"><span>{esc(label)}</span><b>{shown}</b></div>'
+            f'<div class="hairline"><i style="width:{width:.1f}%"></i></div></div>'
+        )
     return "".join(out)
+
+
+def _age_rows(items: list[dict[str, Any]], limit: int = 6) -> str:
+    valid = []
+    for item in (items or [])[:limit]:
+        label, value = item.get("age"), item.get("playSongNum")
+        if label is None or not isinstance(value, (int, float)):
+            continue
+        valid.append((str(label), float(value)))
+    if not valid:
+        return '<div class="empty">暂无数据</div>'
+    max_value = max(v for _, v in valid) or 1
+    return "".join(
+        f'<div class="ratio"><div class="ratio-line"><span>{esc(label)}</span><b>{fmt_num(value)} 首</b></div>'
+        f'<div class="hairline"><i style="width:{max(4, value/max_value*100):.1f}%"></i></div></div>'
+        for label, value in valid
+    )
+
+
+def _year_strip(items: list[dict[str, Any]]) -> str:
+    clean = [
+        {"year": x.get("year"), "plays": x.get("playNum")}
+        for x in (items or [])
+        if x.get("year") is not None and isinstance(x.get("playNum"), (int, float))
+    ]
+    if not clean:
+        return '<div class="empty">暂无年度足迹</div>'
+    max_plays = max(float(x["plays"]) for x in clean) or 1
+    cards = []
+    for item in clean:
+        height = max(8, float(item["plays"]) / max_plays * 100)
+        cards.append(
+            f'<div class="year"><div class="year-bar"><i style="height:{height:.1f}%"></i></div>'
+            f'<b>{esc(item["year"])}</b><span>{fmt_num(item["plays"])}</span></div>'
+        )
+    return "".join(cards)
+
+
+def _capability_list(coverage: dict[str, Any]) -> str:
+    available = coverage.get("available") or []
+    missing = coverage.get("missing") or []
+    good = "".join(f'<span>✓ {esc(x)}</span>' for x in available)
+    bad = "".join(f'<span class="muted">○ {esc(x)}</span>' for x in missing)
+    return good + bad
 
 
 def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
@@ -73,69 +108,126 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     pf = metrics.get("providerFacts") or {}
     profile = data.get("profile") or {}
     collected = data.get("collectedAt") or "Unknown"
-    raw_json = json.dumps({"schemaVersion": data.get("schemaVersion"), "coverage": cov}, ensure_ascii=False)
 
-    def metric_card(label: str, value: Any, note: str, kind: str = "Derived") -> str:
-        v = "—" if value is None else value
-        return f'''<article class="metric"><div class="tag">{kind}</div><div class="metric-value">{esc(v)}</div><div class="metric-label">{esc(label)}</div><p>{esc(note)}</p></article>'''
+    month_song = (pf.get("monthTopSong") or {}).get("name")
+    month_song_count = (pf.get("monthTopSong") or {}).get("playCount")
+    month_artist = (pf.get("monthTopArtist") or {}).get("name")
+    month_artist_count = (pf.get("monthTopArtist") or {}).get("playCount")
+    style = pf.get("monthTopStyle") or {}
+    year_items = pf.get("yearItems") or []
+    year_count = len(year_items)
+
+    hero_title = f"最近，我一直在听《{month_song}》。" if month_song else "把听过的歌，留成一张长期的音乐地图。"
+    nickname = profile.get("nickname") or "Local listener"
+
+    published_meta = json.dumps(
+        {"schemaVersion": data.get("schemaVersion"), "coverage": cov, "collectedAt": collected},
+        ensure_ascii=False,
+    )
 
     html_doc = f'''<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ne-listen · Listening Archive</title>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="{esc(nickname)} 的长期网易云听歌档案。">
+<title>{esc(nickname)} · ne-listen</title>
 <style>
-:root{{--bg:#0b0d12;--panel:#121722;--panel2:#171d2a;--text:#eef2f7;--muted:#97a0af;--line:#262e3e;--accent:#ff5b67;--accent2:#ff9c6b;--good:#69d6a3;--shadow:0 18px 50px rgba(0,0,0,.22)}}
-*{{box-sizing:border-box}} html{{scroll-behavior:smooth}} body{{margin:0;background:radial-gradient(900px 500px at 80% -10%,rgba(255,91,103,.14),transparent 60%),var(--bg);color:var(--text);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
-a{{color:inherit}} .shell{{max-width:1180px;margin:auto;padding:28px 22px 80px}} .nav{{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;margin:-28px -22px 54px;padding:18px 22px;background:rgba(11,13,18,.84);backdrop-filter:blur(16px);border-bottom:1px solid rgba(38,46,62,.7)}} .brand{{font-weight:850;letter-spacing:-.03em}} .navlinks{{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}} .pill,.navlinks a{{border:1px solid var(--line);padding:6px 10px;border-radius:999px;color:var(--muted);font-size:11px;text-decoration:none}}
-.hero{{display:grid;grid-template-columns:1.5fr .8fr;gap:24px;align-items:end;margin-bottom:28px}} h1{{font-size:clamp(44px,8vw,94px);line-height:.93;letter-spacing:-.065em;margin:0 0 22px;max-width:850px}} .lead{{font-size:18px;color:var(--muted);max-width:720px}} .identity{{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:26px;padding:24px;box-shadow:var(--shadow)}} .identity small{{color:var(--muted)}} .identity strong{{display:block;font-size:24px;margin-top:4px}} .source-row{{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}} .source{{font-size:11px;border:1px solid var(--line);padding:5px 8px;border-radius:999px}} .source.on{{color:var(--good)}} .source.off{{color:#697384}}
-.grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}} .stat,.metric,.panel{{border:1px solid var(--line);background:rgba(18,23,34,.88);border-radius:22px}} .stat{{padding:22px}} .stat b{{font-size:32px;letter-spacing:-.04em;display:block}} .stat span{{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}} .stat small{{display:block;color:#697384;margin-top:6px}}
-.section{{margin-top:54px;scroll-margin-top:90px}} .section-head{{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:17px}} h2{{font-size:30px;letter-spacing:-.04em;margin:0}} .section-head p{{margin:0;color:var(--muted);max-width:560px;text-align:right}} .metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}} .metric{{padding:20px;min-height:180px}} .tag{{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}} .metric-value{{font-size:36px;font-weight:800;letter-spacing:-.04em;margin-top:16px}} .metric-label{{font-weight:700}} .metric p{{color:var(--muted);font-size:12px;margin:8px 0 0}}
-.two{{display:grid;grid-template-columns:1fr 1fr;gap:16px}} .three{{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px}} .panel{{padding:24px;overflow:hidden}} .panel h3{{font-size:18px;margin:0 0 5px}} .panel .sub{{color:var(--muted);font-size:12px;margin:0 0 18px}} .bar-row{{display:flex;gap:12px;align-items:center;margin:13px 0}} .rank{{font-size:11px;color:#657084;width:22px}} .bar-main{{flex:1;min-width:0}} .bar-label{{display:flex;justify-content:space-between;gap:12px;font-size:13px}} .bar-label span{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}} .bar-label b{{font-size:12px;color:var(--muted)}} .track{{height:5px;background:#232b39;border-radius:999px;margin-top:6px;overflow:hidden}} .fill{{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:999px}} .empty{{padding:30px 0;color:var(--muted)}} .fact-row{{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid rgba(38,46,62,.65);font-size:13px}} .fact-row:last-child{{border-bottom:0}} .fact-row span{{color:var(--muted)}} .fact-row b{{text-align:right}}
-.story{{display:grid;grid-template-columns:1fr 1fr;gap:14px}} .story-card{{padding:24px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(145deg,rgba(255,91,103,.09),rgba(18,23,34,.92))}} .story-card b{{display:block;font-size:25px;letter-spacing:-.03em;margin-bottom:6px}} .story-card p{{margin:0;color:var(--muted)}}
-.coverage{{display:grid;grid-template-columns:220px 1fr;gap:26px;align-items:center}} .ring{{width:180px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--good) 0 {cov['score']}%,#252c38 {cov['score']}% 100%);position:relative}} .ring:after{{content:"";position:absolute;inset:14px;background:var(--panel);border-radius:50%}} .ring b{{font-size:38px;z-index:1}} .caps{{display:grid;grid-template-columns:1fr 1fr;gap:8px}} .cap{{padding:10px 12px;border-radius:12px;background:#171d28;font-size:12px}} .yes{{color:var(--good)}} .no{{color:#7d8795}} footer{{margin-top:60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:22px}}
-@media(max-width:950px){{.hero,.two,.three,.coverage{{grid-template-columns:1fr}} .grid,.metrics{{grid-template-columns:repeat(2,1fr)}} .section-head{{align-items:start;flex-direction:column}} .section-head p{{text-align:left}}}} @media(max-width:560px){{.grid,.metrics,.caps,.story{{grid-template-columns:1fr}} .shell{{padding:20px 14px 60px}} .nav{{margin:-20px -14px 42px;padding:14px}} .navlinks a:nth-child(n+4){{display:none}}}}
-</style></head><body><main class="shell">
-<div class="nav"><div class="brand">ne-listen</div><div class="navlinks"><a href="#life">生涯</a><a href="#now">最近</a><a href="#taste">偏好</a><a href="#library">歌单</a><a href="#coverage">数据边界</a></div></div>
-<section class="hero"><div><h1>Your listening life, reconstructed.</h1><p class="lead">像阅读档案一样，把网易云从一次性的年度总结变成持续积累的个人听歌档案。这里区分 API 直接观测、代码派生和仍然未知的历史。</p><div class="source-row">{_provider_badges(data)}</div></div><div class="identity"><small>Listening archive for</small><strong>{esc(profile.get('nickname') or 'Local listener')}</strong><small>snapshot · {esc(collected)}</small></div></section>
-<section class="grid" id="life">
-<div class="stat"><b>{fmt_num(s['knownPlays'])}</b><span>known plays</span><small>来自当前可见长期排行，不宣称等于历史总播放</small></div>
-<div class="stat"><b>{fmt_num(s['uniqueSongs'])}</b><span>ranked songs</span><small>长期排行中已观测歌曲</small></div>
-<div class="stat"><b>{fmt_num(s['likedIds'])}</b><span>liked songs</span><small>当前红心 ID 数</small></div>
-<div class="stat"><b>{fmt_num(s['playlists'])}</b><span>playlists</span><small>{fmt_num(s['createdPlaylists'])} created · {fmt_num(s['subscribedPlaylists'])} subscribed</small></div>
-</section>
-<section class="section"><div class="section-head"><div><div class="pill">Life archive</div><h2>你的音乐生涯，目前能确认什么</h2></div><p>账户层指标和长期排行是两种不同证据。网易云没有返回的完整历史不会被补成 0。</p></div><div class="story">
-<div class="story-card"><b>Lv.{esc(s['accountLevel']) if s['accountLevel'] is not None else '—'}</b><p>网易云账户等级。若接口没有返回则保持未知。</p></div>
-<div class="story-card"><b>{fmt_num(s['providerListenSongs'])}</b><p>用户详情接口中的 listenSongs（若可用），与本页“known plays”不是同一口径。</p></div>
-<div class="story-card"><b>{fmt_num(s['playlistKnownTracks'])}</b><p>本次从可访问歌单中实际恢复出的唯一曲目。</p></div>
-<div class="story-card"><b>{fmt_num(s['accountAgeDays'])} days</b><p>若网易云返回 createDays，这里展示账户存在时长。</p></div>
-</div></section>
-<section class="section"><div class="section-head"><div><div class="pill">Derived layer</div><h2>How you listen</h2></div><p>这些指标描述已观测播放分布，不等同于人格判断；以后 snapshot 累积后会加入真正的纵向变化。</p></div><div class="metrics">
-{metric_card('Repeat Index', f"{idx['repeatIndex']}%" if idx['repeatIndex'] is not None else None, 'Top 10% 歌曲占已知播放量的比例。')}
-{metric_card('Artist Loyalty', f"{idx['artistLoyalty']}%" if idx['artistLoyalty'] is not None else None, 'Top 10% 歌手占已知播放量的比例。')}
-{metric_card('Taste Diversity', idx['tasteDiversityEffectiveArtists'], '基于 Shannon entropy 的有效歌手数量。')}
-{metric_card('Recent outside Top100', f"{idx['recentOutsideTop100']}%" if idx['recentOutsideTop100'] is not None else None, '最近播放中不属于网易云长期 Top100 的比例；它不是“新歌率”，也不把未知历史当作 0。')}
-</div></section>
-<section class="section two"><div class="panel"><h3>Most played songs</h3><p class="sub">当前“所有时间排行”接口能观测到的高频歌曲。</p>{_bars(metrics['topSongs'],'playCount')}</div><div class="panel"><h3>Artists you return to</h3><p class="sub">多歌手歌曲按歌手平分一次播放权重。</p>{_bars(metrics['topArtists'],'playCount')}</div></section>
-<section class="section" id="now"><div class="section-head"><div><div class="pill">Current rotation</div><h2>最近这一周，你在回到什么</h2></div><p>把长期偏好和短期循环分开看，避免把“这周突然上头”误当作长期口味。</p></div><div class="two"><div class="panel"><h3>Week songs</h3>{_bars(metrics['weekSongs'],'playCount')}</div><div class="panel"><h3>Week artists</h3>{_bars(metrics['weekArtists'],'playCount')}</div></div></section>
-<section class="section" id="native"><div class="section-head"><div><div class="pill">Observed · NetEase native</div><h2>网易云自己的听歌足迹</h2></div><p>这一层不是 ne-listen 猜的，而是网易云当前听歌足迹接口直接返回。和长期 Top100 派生指标分开呈现。</p></div>
-<div class="grid">
-<div class="stat"><b>{esc((pf.get('monthTopSong') or {}).get('name'))}</b><span>month top song</span><small>{fmt_num((pf.get('monthTopSong') or {}).get('playCount'))} plays</small></div>
-<div class="stat"><b>{esc((pf.get('monthTopArtist') or {}).get('name'))}</b><span>month top artist</span><small>{fmt_num((pf.get('monthTopArtist') or {}).get('playCount'))} plays</small></div>
-<div class="stat"><b>{esc((pf.get('monthTopStyle') or {}).get('genre'))}</b><span>highlighted style</span><small>网易云突出显示 · {esc((pf.get('monthTopStyle') or {}).get('secondGenre'))}</small></div>
-<div class="stat"><b>{fmt_num(pf.get('monthListenDays'))}</b><span>listening days</span><small>current month · provider observed</small></div>
+:root{{--bg:#f4f0e9;--paper:#fffdf9;--ink:#282421;--muted:#776e66;--line:#dfd4c6;--accent:#b85d49;--soft:#eee4d7;--green:#7b8f75;--shadow:0 12px 36px rgba(48,39,31,.07)}}
+*{{box-sizing:border-box}}html{{scroll-behavior:smooth}}body{{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,"SF Pro Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}}a{{color:inherit}}.shell{{width:min(1120px,calc(100% - 32px));margin:auto}}
+.nav{{position:sticky;top:0;z-index:20;background:rgba(244,240,233,.88);backdrop-filter:blur(16px);border-bottom:1px solid rgba(223,212,198,.8)}}.navin{{height:62px;display:flex;align-items:center;justify-content:space-between;gap:20px}}.brand{{font-weight:850;letter-spacing:-.035em}}.brand i{{font-style:normal;color:var(--accent)}}.links{{display:flex;gap:6px;align-items:center}}.links a{{text-decoration:none;font-size:12px;color:var(--muted);padding:8px 10px;border-radius:999px}}.links a:hover{{background:var(--paper);color:var(--ink)}}.links .gh{{border:1px solid var(--line);background:var(--paper)}}
+.hero{{padding:96px 0 70px}}.eyebrow{{font-size:11px;letter-spacing:.16em;font-weight:850;color:var(--accent)}}h1{{font-size:clamp(52px,8vw,96px);line-height:.96;letter-spacing:-.075em;margin:14px 0 26px;max-width:1000px}}.hero-copy{{font-size:clamp(16px,2vw,20px);line-height:1.75;color:var(--muted);max-width:760px;margin:0}}.hero-copy strong{{color:var(--ink);font-weight:650}}
+.stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:54px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}.stat{{padding:22px 20px 22px 0}}.stat:not(:last-child){{border-right:1px solid var(--line);padding-right:20px;margin-right:20px}}.stat b{{display:block;font-size:30px;letter-spacing:-.05em}}.stat span{{font-size:11px;color:var(--muted)}}
+section{{padding:78px 0;border-top:1px solid var(--line);scroll-margin-top:72px}}.sectionhead{{display:flex;align-items:end;justify-content:space-between;gap:30px;margin-bottom:34px}}.sectionhead h2{{font-size:clamp(32px,5vw,54px);line-height:1.02;letter-spacing:-.055em;margin:0;max-width:700px}}.sectionhead p{{max-width:440px;color:var(--muted);font-size:13px;line-height:1.7;margin:0}}
+.now{{display:grid;grid-template-columns:1.35fr .65fr;gap:12px}}.feature{{background:var(--paper);border:1px solid var(--line);border-radius:24px;padding:28px;box-shadow:var(--shadow)}}.feature-kicker{{font-size:10px;letter-spacing:.12em;color:var(--accent);font-weight:850}}.feature h3{{font-size:clamp(30px,4vw,54px);line-height:1.04;letter-spacing:-.055em;margin:18px 0 10px}}.feature p{{color:var(--muted);margin:0}}.facts{{display:grid;gap:0}}.fact{{padding:19px 0;border-bottom:1px solid var(--line)}}.fact:first-child{{padding-top:0}}.fact:last-child{{border-bottom:0;padding-bottom:0}}.fact span{{display:block;font-size:11px;color:var(--muted)}}.fact b{{font-size:21px;letter-spacing:-.025em}}
+.duo{{display:grid;grid-template-columns:1fr 1fr;gap:46px}}.ranklist{{list-style:none;padding:0;margin:0}}.ranklist li{{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--line)}}.ranklist li:last-child{{border-bottom:0}}.rank{{font-size:10px;color:var(--accent);font-weight:850}}.rank-name{{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.rank-value{{font-size:12px;color:var(--muted)}}.subhead{{font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:800;margin:0 0 8px}}
+.taste{{display:grid;grid-template-columns:repeat(3,1fr);gap:34px}}.taste h3{{font-size:18px;margin:0 0 20px}}.ratio{{margin:15px 0}}.ratio-line{{display:flex;justify-content:space-between;gap:14px;font-size:13px}}.ratio-line b{{font-size:12px;color:var(--muted)}}.hairline{{height:2px;background:#e4dbcf;margin-top:8px;overflow:hidden}}.hairline i{{display:block;height:100%;background:var(--accent)}}.yearstrip{{height:230px;display:grid;grid-template-columns:repeat({max(1, year_count)},minmax(54px,1fr));gap:9px;align-items:end}}.year{{display:grid;grid-template-rows:1fr auto auto;min-width:0;text-align:center;gap:6px;height:100%}}.year-bar{{height:165px;display:flex;align-items:end;justify-content:center;border-bottom:1px solid var(--line)}}.year-bar i{{display:block;width:min(28px,60%);background:var(--accent);border-radius:5px 5px 0 0;opacity:.86}}.year b{{font-size:12px}}.year span{{font-size:10px;color:var(--muted)}}
+.patterns{{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}.pattern{{padding:26px 28px 26px 0}}.pattern:not(:last-child){{border-right:1px solid var(--line);padding-right:28px;margin-right:28px}}.pattern b{{font-size:35px;letter-spacing:-.05em;display:block}}.pattern span{{font-size:13px;font-weight:700}}.pattern p{{font-size:11px;line-height:1.6;color:var(--muted);margin:6px 0 0}}
+.playlists{{display:grid;grid-template-columns:1.1fr .9fr;gap:46px}}.library-note{{font-size:clamp(28px,4vw,44px);line-height:1.08;letter-spacing:-.045em;margin:0 0 18px}}.library-copy{{color:var(--muted);max-width:460px}}.mini-stats{{display:flex;gap:26px;margin-top:28px;flex-wrap:wrap}}.mini-stats b{{font-size:22px;display:block}}.mini-stats span{{font-size:10px;color:var(--muted)}}
+details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}summary{{cursor:pointer;list-style:none;padding:22px 0;font-weight:750}}summary::-webkit-details-marker{{display:none}}summary:after{{content:"＋";float:right;color:var(--muted)}}details[open] summary:after{{content:"－"}}.method{{padding:0 0 26px;color:var(--muted);font-size:12px;line-height:1.75;display:grid;grid-template-columns:1fr 1fr;gap:28px}}.method strong{{color:var(--ink)}}.caps{{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}}.caps span{{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:4px 8px;font-size:10px;color:var(--green)}}.caps .muted{{color:var(--muted)}}.empty{{color:var(--muted);font-size:12px;padding:10px 0}}
+.footer{{padding:40px 0 64px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:24px;color:var(--muted);font-size:11px}}
+@media(max-width:900px){{.now,.playlists{{grid-template-columns:1fr}}.taste{{grid-template-columns:1fr 1fr}}.duo{{gap:24px}}.stats{{grid-template-columns:repeat(2,1fr)}}.stat:nth-child(2){{border-right:0;margin-right:0}}.stat:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.yearstrip{{overflow-x:auto;grid-template-columns:repeat({max(1, year_count)},72px)}}}}
+@media(max-width:650px){{.shell{{width:min(100% - 22px,1120px)}}.hero{{padding:66px 0 54px}}.links a:not(.gh){{display:none}}.sectionhead{{display:block}}.sectionhead p{{margin-top:12px}}.duo,.taste,.patterns,.method{{grid-template-columns:1fr}}.duo{{gap:44px}}.patterns{{border-bottom:0}}.pattern,.pattern:not(:last-child){{border-right:0;border-bottom:1px solid var(--line);padding:20px 0;margin:0}}.stats{{display:grid;grid-template-columns:1fr 1fr}}.stat,.stat:not(:last-child){{margin:0;padding:18px 14px 18px 0}}.stat:nth-child(odd){{border-right:1px solid var(--line)}}.stat b{{font-size:24px}}.feature{{padding:22px}}.footer{{display:block}}.footer span{{display:block;margin-top:8px}}}}
+</style>
+</head>
+<body>
+<nav class="nav"><div class="shell navin"><div class="brand">ne-<i>listen</i></div><div class="links"><a href="#now">最近</a><a href="#long">长期</a><a href="#taste">版图</a><a href="#years">年份</a><a class="gh" href="https://github.com/CochraneK/ne-listen">GitHub ↗</a></div></div></nav>
+<main>
+<header class="shell hero">
+<div class="eyebrow">A PERSONAL LISTENING ARCHIVE</div>
+<h1>{esc(hero_title)}</h1>
+<p class="hero-copy">这是 <strong>{esc(nickname)}</strong> 的长期听歌档案。不是一次性的年度总结，而是一份会继续生长的音乐记录。</p>
+<div class="stats">
+<div class="stat"><b>{fmt_num(s.get('providerListenSongs'))}</b><span>网易云 listenSongs</span></div>
+<div class="stat"><b>{fmt_num(s.get('likedIds'))}</b><span>红心歌曲</span></div>
+<div class="stat"><b>{fmt_num(s.get('playlists'))}</b><span>歌单</span></div>
+<div class="stat"><b>{fmt_num(year_count)}</b><span>年度足迹</span></div>
 </div>
-<div class="three" style="margin-top:16px">
-<div class="panel"><h3>Style preference</h3><p class="sub">网易云曲风偏好接口返回的标签比例。</p>{_fact_rows(pf.get('stylePreferences') or [], 'tagName', 'ratio')}</div>
-<div class="panel"><h3>Language mix</h3><p class="sub">当前月度足迹中的语言结构。</p>{_fact_rows(pf.get('monthLanguageDistribution') or [], 'language', 'percent')}</div>
-<div class="panel"><h3>Music age</h3><p class="sub">当前月度足迹中的发行年代结构。</p>{_fact_rows(pf.get('monthAgeDistribution') or [], 'age', 'playSongNum', ' songs')}</div>
+</header>
+
+<section id="now"><div class="shell">
+<div class="sectionhead"><h2>最近在听</h2><p>只放这一段时间最鲜明的声音，不把页面做成榜单墙。</p></div>
+<div class="now">
+<article class="feature"><div class="feature-kicker">THIS MONTH</div><h3>{esc(month_song)}</h3><p>{fmt_num(month_song_count)} 次 · 网易云本月足迹</p></article>
+<aside class="feature facts">
+<div class="fact"><span>最近常听的歌手</span><b>{esc(month_artist)}</b><small>{fmt_num(month_artist_count)} 次</small></div>
+<div class="fact"><span>网易云突出曲风</span><b>{esc(style.get('genre'))}</b><small>{esc(style.get('secondGenre'))}</small></div>
+<div class="fact"><span>本月听歌天数</span><b>{fmt_num(pf.get('monthListenDays'))} 天</b></div>
+</aside>
 </div>
-<div class="two" style="margin-top:16px">
-<div class="panel"><h3>Annual footprint</h3><p class="sub">网易云目前返回的历年足迹；展示每年 playNum，不伪造缺失年份。</p>{_fact_rows(pf.get('yearItems') or [], 'year', 'playNum', ' · provider playNum')}</div>
-<div class="panel"><h3>Listening rhythm</h3><p class="sub">当前月度六个时段的原生 duration 值，保持网易云原始口径。</p>{_fact_rows(pf.get('monthTimePeriods') or [], 'period', 'duration')}</div>
 </div></section>
-<section class="section" id="taste"><div class="section-head"><div><div class="pill">Taste map</div><h2>偏好不是一个标签</h2></div><p>先展示能稳定从歌曲元数据和行为数据推出的结构；曲风 API 可用时保留原始 provider payload，后续继续做风格层解析。</p></div><div class="three"><div class="panel"><h3>Albums in the record</h3>{_bars(metrics['topAlbums'],'playCount')}</div><div class="panel"><h3>Release decades</h3><p class="sub">按本次可恢复歌曲的发行时间计数。</p>{_decade_bars(metrics['releaseDecades'])}</div><div class="panel"><h3>Hidden favorites</h3><p class="sub">播放很多、但当前红心列表中没有出现的候选，不等于“你其实喜欢”。</p>{_bars(metrics['hiddenFavorites'],'playCount')}</div></div></section>
-<section class="section" id="library"><div class="section-head"><div><div class="pill">Library</div><h2>你的歌单版图</h2></div><p>自建和收藏歌单分开统计；曲目能否恢复取决于歌单权限和接口覆盖。</p></div><div class="two"><div class="panel"><h3>Largest playlists</h3><p class="sub">按 trackCount 排序，收藏歌单标记 subscribed。</p>{_bars(metrics['topPlaylists'],'trackCount',' tracks')}</div><div class="panel"><h3>Library signals</h3>{metric_card('Liked share', f"{idx['likedShareObserved']}%" if idx['likedShareObserved'] is not None else None, '长期排行中，同时存在于当前红心 ID 的歌曲比例。')}{metric_card('Observed liked', s['likedObserved'], '长期排行与当前红心列表的交集数量。','Observed')}</div></div></section>
-<section class="section" id="coverage"><div class="section-head"><div><div class="pill">Evidence layer</div><h2>Data coverage</h2></div><p>Coverage 反映这次同步真正拿到了哪些来源。接口失败、隐私设置或历史不可恢复，都不会被解释成“没有发生”。</p></div><div class="panel coverage"><div class="ring"><b>{cov['score']}%</b></div><div class="caps">{''.join(f'<div class="cap yes">✓ {esc(x)}</div>' for x in cov['available'])}{''.join(f'<div class="cap no">○ {esc(x)}</div>' for x in cov['missing'])}</div></div></section>
-<footer>Observed facts → deterministic normalization → derived metrics → static report. Raw API responses and login credentials are not embedded in this Page. <span hidden>{esc(raw_json)}</span></footer>
-</main></body></html>'''
+
+<section id="long"><div class="shell">
+<div class="sectionhead"><h2>有些声音，会一直回来。</h2><p>长期排行只展示最值得看的前几项。完整口径与边界放在页面最后。</p></div>
+<div class="duo">
+<div><div class="subhead">SONGS I RETURN TO</div><ol class="ranklist">{_ranked(metrics.get('topSongs') or [], 'playCount', 6)}</ol></div>
+<div><div class="subhead">ARTISTS I RETURN TO</div><ol class="ranklist">{_ranked(metrics.get('topArtists') or [], 'playCount', 6)}</ol></div>
+</div>
+</div></section>
+
+<section id="taste"><div class="shell">
+<div class="sectionhead"><h2>我的音乐版图，不止一个标签。</h2><p>曲风、语言和年代并排看，比一句“你喜欢什么风格”更接近真实。</p></div>
+<div class="taste">
+<div><h3>曲风</h3>{_ratio_rows(pf.get('stylePreferences') or [], 'tagName', 'ratio')}</div>
+<div><h3>语言</h3>{_ratio_rows(pf.get('monthLanguageDistribution') or [], 'language', 'percent')}</div>
+<div><h3>年代</h3>{_age_rows(pf.get('monthAgeDistribution') or [])}</div>
+</div>
+</div></section>
+
+<section id="years"><div class="shell">
+<div class="sectionhead"><h2>听歌这件事，已经留下了年份。</h2><p>网易云当前能返回的年度足迹。从这里开始，ne-listen 会继续用自己的 snapshot 往后接。</p></div>
+<div class="yearstrip">{_year_strip(year_items)}</div>
+</div></section>
+
+<section><div class="shell">
+<div class="sectionhead"><h2>再看三件小事。</h2><p>这些是 ne-listen 从已观测数据中计算的辅助视角，不替你解释性格，也不把未知当作 0。</p></div>
+<div class="patterns">
+<div class="pattern"><b>{_percent(idx.get('repeatIndex'))}</b><span>Repeat Index</span><p>长期 Top100 中，头部 10% 歌曲占已知播放的比例。</p></div>
+<div class="pattern"><b>{fmt_num(idx.get('tasteDiversityEffectiveArtists'))}</b><span>Effective artists</span><p>基于 Shannon entropy 的有效歌手数量。</p></div>
+<div class="pattern"><b>{_percent(idx.get('recentOutsideTop100'))}</b><span>最近不在 Top100</span><p>不是“新歌率”，只说明最近播放没有落在长期 Top100。</p></div>
+</div>
+</div></section>
+
+<section id="library"><div class="shell">
+<div class="sectionhead"><h2>歌单，是另一种记忆。</h2><p>收藏和创建的歌单都属于听歌史，但不需要全部铺在首页。</p></div>
+<div class="playlists">
+<div><h3 class="library-note">{fmt_num(s.get('likedIds'))} 首红心，{fmt_num(s.get('playlistKnownTracks'))} 首可恢复歌单曲目。</h3><p class="library-copy">当前公开页只展示最大的几个歌单。完整歌单内容留在私有数据层，不把个人档案变成数据倾倒。</p><div class="mini-stats"><div><b>{fmt_num(s.get('createdPlaylists'))}</b><span>自建歌单</span></div><div><b>{fmt_num(s.get('subscribedPlaylists'))}</b><span>收藏歌单</span></div><div><b>{_percent(s.get('playlistTrackCoverage'))}</b><span>曲目恢复率</span></div></div></div>
+<div><div class="subhead">LARGEST PLAYLISTS</div><ol class="ranklist">{_ranked(metrics.get('topPlaylists') or [], 'trackCount', 6, ' 首')}</ol></div>
+</div>
+</div></section>
+
+<section><div class="shell">
+<details>
+<summary>数据说明</summary>
+<div class="method">
+<div><strong>这页是什么</strong><br>网易云直接返回的数据 + ne-listen 的确定性计算。长期排行接口只覆盖 Top100，因此页面不会把榜外历史当作 0，也不会声称恢复了每一次播放。</div>
+<div><strong>当前覆盖</strong><br>{fmt_num(cov.get('score'))}% 的 V1 数据能力在本次同步中可用。Cookie、原始 API 响应、normalized archive 和 snapshots 都不会进入公开 Page。<div class="caps">{_capability_list(cov)}</div></div>
+</div>
+</details>
+</div></section>
+</main>
+<footer class="shell footer"><div>ne-listen · personal music archive</div><span>Last snapshot · {esc(collected)}</span><span hidden>{esc(published_meta)}</span></footer>
+</body>
+</html>'''
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html_doc, encoding="utf-8")
