@@ -16,10 +16,22 @@ def fmt_num(value: Any) -> str:
     return "—"
 
 
+def _number(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def _percent(value: Any) -> str:
-    if not isinstance(value, (int, float)):
+    parsed = _number(value)
+    if parsed is None:
         return "—"
-    v = float(value)
+    v = parsed
     if 0 <= v <= 1:
         v *= 100
     return f"{v:.0f}%" if v.is_integer() else f"{v:.1f}%"
@@ -39,9 +51,10 @@ def _ratio_rows(items: list[dict[str, Any]], label_key: str, value_key: str, lim
     valid = []
     for item in (items or [])[:limit]:
         label, value = item.get(label_key), item.get(value_key)
-        if label is None or not isinstance(value, (int, float)):
+        numeric = _number(value)
+        if label is None or numeric is None:
             continue
-        numeric = float(value) * 100 if 0 <= float(value) <= 1 else float(value)
+        numeric = numeric * 100 if 0 <= numeric <= 1 else numeric
         valid.append((str(label), numeric))
     if not valid:
         return '<div class="empty">暂无数据</div>'
@@ -61,9 +74,10 @@ def _age_rows(items: list[dict[str, Any]], limit: int = 6) -> str:
     valid = []
     for item in (items or [])[:limit]:
         label, value = item.get("age"), item.get("playSongNum")
-        if label is None or not isinstance(value, (int, float)):
+        numeric = _number(value)
+        if label is None or numeric is None:
             continue
-        valid.append((str(label), float(value)))
+        valid.append((str(label), numeric))
     if not valid:
         return '<div class="empty">暂无数据</div>'
     max_value = max(v for _, v in valid) or 1
@@ -75,11 +89,13 @@ def _age_rows(items: list[dict[str, Any]], limit: int = 6) -> str:
 
 
 def _year_strip(items: list[dict[str, Any]]) -> str:
-    clean = [
-        {"year": x.get("year"), "plays": x.get("playNum")}
-        for x in (items or [])
-        if x.get("year") is not None and isinstance(x.get("playNum"), (int, float))
-    ]
+    clean = []
+    for x in items or []:
+        year = x.get("year")
+        plays = _number(x.get("playNum"))
+        if year is not None and plays is not None:
+            clean.append({"year": year, "plays": plays})
+    clean.sort(key=lambda x: int(x["year"]))
     if not clean:
         return '<div class="empty">暂无年度足迹</div>'
     max_plays = max(float(x["plays"]) for x in clean) or 1
@@ -116,6 +132,8 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     style = pf.get("monthTopStyle") or {}
     year_items = pf.get("yearItems") or []
     year_count = len(year_items)
+    years = [int(x.get("year")) for x in year_items if str(x.get("year", "")).isdigit()]
+    year_span = f"{min(years)}—{max(years)}" if years else "持续记录"
 
     hero_title = f"最近，我一直在听《{month_song}》。" if month_song else "把听过的歌，留成一张长期的音乐地图。"
     nickname = profile.get("nickname") or "Local listener"
@@ -156,17 +174,17 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 <header class="shell hero">
 <div class="eyebrow">A PERSONAL LISTENING ARCHIVE</div>
 <h1>{esc(hero_title)}</h1>
-<p class="hero-copy">这是 <strong>{esc(nickname)}</strong> 的长期听歌档案。不是一次性的年度总结，而是一份会继续生长的音乐记录。</p>
+<p class="hero-copy">这是 <strong>{esc(nickname)}</strong> 的长期听歌档案。一份会继续生长的音乐记录。</p>
 <div class="stats">
-<div class="stat"><b>{fmt_num(s.get('providerListenSongs'))}</b><span>网易云 listenSongs</span></div>
+<div class="stat"><b>{fmt_num(s.get('providerListenSongs'))}</b><span>网易云听歌记录</span></div>
 <div class="stat"><b>{fmt_num(s.get('likedIds'))}</b><span>红心歌曲</span></div>
 <div class="stat"><b>{fmt_num(s.get('playlists'))}</b><span>歌单</span></div>
-<div class="stat"><b>{fmt_num(year_count)}</b><span>年度足迹</span></div>
+<div class="stat"><b>{fmt_num(year_count)}</b><span>年有记录</span></div>
 </div>
 </header>
 
 <section id="now"><div class="shell">
-<div class="sectionhead"><h2>最近在听</h2><p>只放这一段时间最鲜明的声音，不把页面做成榜单墙。</p></div>
+<div class="sectionhead"><h2>最近在听</h2><p>本月最常出现的声音。</p></div>
 <div class="now">
 <article class="feature"><div class="feature-kicker">THIS MONTH</div><h3>{esc(month_song)}</h3><p>{fmt_num(month_song_count)} 次 · 网易云本月足迹</p></article>
 <aside class="feature facts">
@@ -178,7 +196,7 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 </div></section>
 
 <section id="long"><div class="shell">
-<div class="sectionhead"><h2>有些声音，会一直回来。</h2><p>长期排行只展示最值得看的前几项。完整口径与边界放在页面最后。</p></div>
+<div class="sectionhead"><h2>有些声音，会一直回来。</h2></div>
 <div class="duo">
 <div><div class="subhead">SONGS I RETURN TO</div><ol class="ranklist">{_ranked(metrics.get('topSongs') or [], 'playCount', 6)}</ol></div>
 <div><div class="subhead">ARTISTS I RETURN TO</div><ol class="ranklist">{_ranked(metrics.get('topArtists') or [], 'playCount', 6)}</ol></div>
@@ -186,7 +204,7 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 </div></section>
 
 <section id="taste"><div class="shell">
-<div class="sectionhead"><h2>我的音乐版图，不止一个标签。</h2><p>曲风、语言和年代并排看，比一句“你喜欢什么风格”更接近真实。</p></div>
+<div class="sectionhead"><h2>我的音乐版图，不止一个标签。</h2><p>曲风 · 语言 · 年代</p></div>
 <div class="taste">
 <div><h3>曲风</h3>{_ratio_rows(pf.get('stylePreferences') or [], 'tagName', 'ratio')}</div>
 <div><h3>语言</h3>{_ratio_rows(pf.get('monthLanguageDistribution') or [], 'language', 'percent')}</div>
@@ -195,12 +213,12 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 </div></section>
 
 <section id="years"><div class="shell">
-<div class="sectionhead"><h2>听歌这件事，已经留下了年份。</h2><p>网易云当前能返回的年度足迹。从这里开始，ne-listen 会继续用自己的 snapshot 往后接。</p></div>
+<div class="sectionhead"><h2>听歌这件事，已经留下了年份。</h2><p>{esc(year_span)}</p></div>
 <div class="yearstrip">{_year_strip(year_items)}</div>
 </div></section>
 
 <section><div class="shell">
-<div class="sectionhead"><h2>再看三件小事。</h2><p>这些是 ne-listen 从已观测数据中计算的辅助视角，不替你解释性格，也不把未知当作 0。</p></div>
+<div class="sectionhead"><h2>再看三件小事。</h2></div>
 <div class="patterns">
 <div class="pattern"><b>{_percent(idx.get('repeatIndex'))}</b><span>Repeat Index</span><p>长期 Top100 中，头部 10% 歌曲占已知播放的比例。</p></div>
 <div class="pattern"><b>{fmt_num(idx.get('tasteDiversityEffectiveArtists'))}</b><span>Effective artists</span><p>基于 Shannon entropy 的有效歌手数量。</p></div>
@@ -209,9 +227,9 @@ details{{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}}s
 </div></section>
 
 <section id="library"><div class="shell">
-<div class="sectionhead"><h2>歌单，是另一种记忆。</h2><p>收藏和创建的歌单都属于听歌史，但不需要全部铺在首页。</p></div>
+<div class="sectionhead"><h2>歌单，是另一种记忆。</h2></div>
 <div class="playlists">
-<div><h3 class="library-note">{fmt_num(s.get('likedIds'))} 首红心，{fmt_num(s.get('playlistKnownTracks'))} 首可恢复歌单曲目。</h3><p class="library-copy">当前公开页只展示最大的几个歌单。完整歌单内容留在私有数据层，不把个人档案变成数据倾倒。</p><div class="mini-stats"><div><b>{fmt_num(s.get('createdPlaylists'))}</b><span>自建歌单</span></div><div><b>{fmt_num(s.get('subscribedPlaylists'))}</b><span>收藏歌单</span></div><div><b>{_percent(s.get('playlistTrackCoverage'))}</b><span>曲目恢复率</span></div></div></div>
+<div><h3 class="library-note">{fmt_num(s.get('likedIds'))} 首红心，{fmt_num(s.get('playlistKnownTracks'))} 首可恢复歌单曲目。</h3><p class="library-copy">首页只留几个最大的歌单，完整内容保留在私有数据层。</p><div class="mini-stats"><div><b>{fmt_num(s.get('createdPlaylists'))}</b><span>自建歌单</span></div><div><b>{fmt_num(s.get('subscribedPlaylists'))}</b><span>收藏歌单</span></div><div><b>{_percent(s.get('playlistTrackCoverage'))}</b><span>曲目恢复率</span></div></div></div>
 <div><div class="subhead">LARGEST PLAYLISTS</div><ol class="ranklist">{_ranked(metrics.get('topPlaylists') or [], 'trackCount', 6, ' 首')}</ol></div>
 </div>
 </div></section>
