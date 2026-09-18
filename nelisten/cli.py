@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+
+from .adapters import CompatibleHttpAdapter
+from .demo import synthetic_normalized
+from .doctor import inspect
+from .io import read_json, write_json
+from .metrics import analyze
+from .normalize import normalize
+from .report import render
+from .security import is_local_api
+from .snapshot import snapshot
+
+
+def _data_dir(value: str | None) -> Path:
+    return Path(value or os.environ.get("NELISTEN_DATA_DIR") or "data").resolve()
+
+
+def build_report(normalized: dict, data_dir: Path) -> Path:
+    metrics = analyze(normalized)
+    out = data_dir / "report" / "index.html"
+    render(normalized, metrics, out)
+    write_json(data_dir / "report" / "metrics.json", metrics)
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="ne-listen", description="NetEase listening archive and report generator")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_demo = sub.add_parser("demo", help="generate a synthetic demo report")
+    p_demo.add_argument("--data-dir")
+
+    p_sync = sub.add_parser("sync", help="collect a read-only snapshot from a compatible HTTP API")
+    p_sync.add_argument("--base-url", default=os.environ.get("NELISTEN_API_BASE", "http://127.0.0.1:3000"))
+    p_sync.add_argument("--cookie", default=os.environ.get("NELISTEN_COOKIE", ""))
+    p_sync.add_argument("--uid", default=os.environ.get("NELISTEN_UID") or None)
+    p_sync.add_argument("--data-dir")
+    p_sync.add_argument("--allow-remote-api", action="store_true", help="explicitly allow sending credentials to a non-local API base")
+
+    p_report = sub.add_parser("report", help="rebuild report from normalized latest.json")
+    p_report.add_argument("--data-dir")
+    p_report.add_argument("--input")
+
+    p_import = sub.add_parser("import-raw", help="normalize an existing raw snapshot")
+    p_import.add_argument("path")
+    p_import.add_argument("--data-dir")
+
+    p_doctor = sub.add_parser("doctor", help="inspect local state and coverage")
+    p_doctor.add_argument("--data-dir")
+
+    args = parser.parse_args(argv)
+    data_dir = _data_dir(getattr(args, "data_dir", None))
+
+    if args.cmd == "demo":
+        normalized = synthetic_normalized()
+        write_json(data_dir / "normalized" / "latest.json", normalized)
+        out = build_report(normalized, data_dir)
+        print(f"demo report: {out}")
+        return 0
+
+    if args.cmd == "sync":
+        if args.cookie and not is_local_api(args.base_url) and not args.allow_remote_api:
+            parser.error("refusing to send NELISTEN_COOKIE to a non-local API; self-host locally or pass --allow-remote-api explicitly")
+        adapter = CompatibleHttpAdapter(args.base_url, cookie=args.cookie)
+        raw = adapter.collect(uid=args.uid)
+        normalized = normalize(raw)
+        root = snapshot(raw, normalized, data_dir)
+        out = build_report(normalized, data_dir)
+        ok = sum(1 for v in normalized["capabilities"].values() if v)
+        total = len(normalized["capabilities"])
+        print(f"snapshot: {root}")
+        print(f"capabilities: {ok}/{total}")
+        print(f"report: {out}")
+        return 0
+
+    if args.cmd == "import-raw":
+        raw = read_json(Path(args.path))
+        normalized = normalize(raw)
+        root = snapshot(raw, normalized, data_dir)
+        out = build_report(normalized, data_dir)
+        print(f"imported snapshot: {root}")
+        print(f"report: {out}")
+        return 0
+
+    if args.cmd == "report":
+        path = Path(args.input) if args.input else data_dir / "normalized" / "latest.json"
+        normalized = read_json(path)
+        out = build_report(normalized, data_dir)
+        print(f"report: {out}")
+        return 0
+
+    if args.cmd == "doctor":
+        path = data_dir / "normalized" / "latest.json"
+        normalized = read_json(path) if path.exists() else None
+        for name, ok, detail in inspect(data_dir, normalized):
+            print(f"{'✓' if ok else '○'} {name}: {detail}")
+        return 0
+
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
