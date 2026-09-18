@@ -1,0 +1,74 @@
+name: Build listening archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "nelisten/**"
+      - ".github/workflows/pages.yml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NELISTEN_DATA_DIR: build/private
+      MUSIC_U_VALUE: ${{ secrets.NETEASE_MUSIC_U }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        if: env.MUSIC_U_VALUE != ''
+        with:
+          node-version: "22"
+      - name: Build with real NetEase data
+        if: env.MUSIC_U_VALUE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pinned API package. It runs only on localhost inside this ephemeral runner.
+          PORT=3000 nohup npx --yes @neteasecloudmusicapienhanced/api@4.40.1 > /tmp/ncm-api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3000/ >/dev/null
+          export NELISTEN_COOKIE="MUSIC_U=${MUSIC_U_VALUE}"
+          python -m nelisten sync --base-url http://127.0.0.1:3000 --data-dir "$NELISTEN_DATA_DIR"
+          python -m nelisten doctor --data-dir "$NELISTEN_DATA_DIR"
+          mkdir -p _site
+          cp "$NELISTEN_DATA_DIR/report/index.html" _site/index.html
+          cp "$NELISTEN_DATA_DIR/report/metrics.json" _site/metrics.json
+      - name: Build synthetic demo when no secret is configured
+        if: env.MUSIC_U_VALUE == ''
+        run: |
+          python -m nelisten demo --data-dir build/demo
+          mkdir -p _site
+          cp build/demo/report/index.html _site/index.html
+          cp build/demo/report/metrics.json _site/metrics.json
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy report only
+        id: deployment
+        uses: actions/deploy-pages@v4

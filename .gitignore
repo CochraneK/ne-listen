@@ -1,0 +1,21 @@
+# credentials / private listening data
+.env
+.env.*
+!.env.example
+data/raw/
+data/normalized/
+data/snapshots/
+data/report/
+*.cookie
+*.cookies
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
