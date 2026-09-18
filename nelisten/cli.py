@@ -13,6 +13,7 @@ from .normalize import normalize
 from .report import render
 from .security import is_local_api
 from .snapshot import snapshot
+from .textmining import select_text_corpus_song_ids
 
 
 def _data_dir(value: str | None) -> Path:
@@ -39,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     p_sync.add_argument("--cookie", default=os.environ.get("NELISTEN_COOKIE", ""))
     p_sync.add_argument("--uid", default=os.environ.get("NELISTEN_UID") or None)
     p_sync.add_argument("--data-dir")
+    p_sync.add_argument("--text-max", type=int, default=int(os.environ.get("NELISTEN_TEXT_MAX", "180")), help="max songs for lyric text mining; 0 disables")
+    p_sync.add_argument("--text-workers", type=int, default=int(os.environ.get("NELISTEN_TEXT_WORKERS", "4")), help="concurrent lyric requests, capped at 8")
     p_sync.add_argument("--allow-remote-api", action="store_true", help="explicitly allow sending credentials to a non-local API base")
 
     p_report = sub.add_parser("report", help="rebuild report from normalized latest.json")
@@ -68,12 +71,19 @@ def main(argv: list[str] | None = None) -> int:
         adapter = CompatibleHttpAdapter(args.base_url, cookie=args.cookie)
         raw = adapter.collect(uid=args.uid)
         normalized = normalize(raw)
+        lyric_ids = select_text_corpus_song_ids(normalized, max_songs=args.text_max)
+        if lyric_ids:
+            raw["responses"]["lyrics"] = adapter.collect_lyrics(lyric_ids, max_workers=args.text_workers)
+            normalized = normalize(raw)
         root = snapshot(raw, normalized, data_dir)
         out = build_report(normalized, data_dir)
         ok = sum(1 for v in normalized["capabilities"].values() if v)
         total = len(normalized["capabilities"])
         print(f"snapshot: {root}")
         print(f"capabilities: {ok}/{total}")
+        if lyric_ids:
+            text_meta = normalized.get("textCorpusMeta") or {}
+            print(f"lyrics: {text_meta.get('successfulResponses', 0)}/{text_meta.get('selectedSongs', 0)}")
         print(f"report: {out}")
         return 0
 

@@ -5,6 +5,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
+from .textmining import analyze_text
+
 
 def _effective_diversity(counter: Counter[str]) -> float | None:
     total = sum(counter.values())
@@ -294,6 +296,7 @@ def analyze(data: dict[str, Any]) -> dict[str, Any]:
             "missing": [k for k in expected if k not in available],
             "score": round(len(available) / len(expected) * 100),
         },
+        "text": analyze_text(data),
         "providerFacts": _provider_facts(provider_payloads),
         "providerShapes": {
             key: _shape(value)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -135,6 +136,42 @@ class CompatibleHttpAdapter:
             },
             "error": error,
             "path": "/playlist/track/all",
+        }
+
+    def collect_lyrics(self, song_ids: list[str], max_workers: int = 4) -> dict[str, Any]:
+        results: dict[str, Any] = {}
+
+        def fetch_one(song_id: str) -> tuple[str, dict[str, Any]]:
+            response = self._call("/lyric/new", {"id": song_id})
+            if not response.get("ok"):
+                response = self._call("/lyric", {"id": song_id})
+            return song_id, response
+
+        with ThreadPoolExecutor(max_workers=max(1, min(max_workers, 8))) as pool:
+            futures = {pool.submit(fetch_one, song_id): song_id for song_id in song_ids}
+            for future in as_completed(futures):
+                song_id = futures[future]
+                try:
+                    sid, response = future.result()
+                    results[sid] = response
+                except Exception as exc:
+                    results[song_id] = {
+                        "ok": False,
+                        "status": None,
+                        "data": None,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "path": "/lyric/new",
+                    }
+
+        successes = sum(1 for response in results.values() if response.get("ok"))
+        return {
+            "ok": successes > 0,
+            "status": 200 if successes > 0 else None,
+            "data": results,
+            "error": None if successes > 0 else "no lyric responses collected",
+            "path": "/lyric/new",
+            "requested": len(song_ids),
+            "successful": successes,
         }
 
     def collect(self, uid: str | None = None) -> dict[str, Any]:

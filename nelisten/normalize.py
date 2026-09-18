@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from .textmining import extract_primary_lyric
+
 
 def _response(raw: dict[str, Any], key: str) -> Any:
     r = (raw.get("responses") or {}).get(key) or {}
@@ -145,6 +147,19 @@ def _extract_playlists(payload: Any, tracks_payload: Any) -> list[dict[str, Any]
     return result
 
 
+def _extract_lyrics(payload: Any) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        return {}
+    out: dict[str, str] = {}
+    for sid, response in payload.items():
+        if not isinstance(response, dict) or not response.get("ok"):
+            continue
+        lyric = extract_primary_lyric(response.get("data"))
+        if lyric:
+            out[str(sid)] = lyric
+    return out
+
+
 def _extract_profile(raw: dict[str, Any]) -> dict[str, Any]:
     profile_payload = _response(raw, "profile")
     account_payload = _response(raw, "account")
@@ -184,6 +199,7 @@ def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     recent = _recent_list(_response(raw, "recent_songs"))
     liked_ids = _extract_liked(_response(raw, "liked_ids"))
     playlists = _extract_playlists(_response(raw, "playlists"), _response(raw, "playlist_tracks"))
+    lyrics = _extract_lyrics(_response(raw, "lyrics"))
 
     capability = {}
     for key, response in (raw.get("responses") or {}).items():
@@ -209,6 +225,11 @@ def normalize(raw: dict[str, Any]) -> dict[str, Any]:
         "records": {"all": all_records, "week": week_records, "recent": recent},
         "likedSongIds": liked_ids,
         "playlists": playlists,
+        "lyrics": lyrics,
+        "textCorpusMeta": {
+            "selectedSongs": int(((raw.get("responses") or {}).get("lyrics") or {}).get("requested") or 0),
+            "successfulResponses": int(((raw.get("responses") or {}).get("lyrics") or {}).get("successful") or 0),
+        },
         "providerPayloads": {
             "userLevel": _response(raw, "user_level"),
             "userSubcount": _response(raw, "user_subcount"),
