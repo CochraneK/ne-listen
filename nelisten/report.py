@@ -129,6 +129,7 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
     pf = metrics.get("providerFacts") or {}
     text_metrics = metrics.get("text") or {}
     deep_text = metrics.get("deepText") or {}
+    semantic = metrics.get("semantic") or {}
     network = metrics.get("network") or {}
     profile = data.get("profile") or {}
     collected = data.get("collectedAt") or "Unknown"
@@ -162,7 +163,18 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
         agreement = deep_text.get("methodAgreementAMI")
         agreement_text = f"{float(agreement):.3f}" if isinstance(agreement, (int, float)) else "—"
         topic_html = ""
-        if deep_text.get("available"):
+        topic_label = "EXPLORATORY NMF THEMES"
+        semantic_stability = None
+        semantic_drift = None
+        if semantic.get("available"):
+            topic_label = "MULTILINGUAL E5 TOPICS"
+            topic_html = "".join(
+                f'<div class="topicrow"><span>{esc(topic.get("label"))}</span><b>{_percent(topic.get("prevalence"))}</b></div>'
+                for topic in ((semantic.get("clustering") or {}).get("clusters") or [])[:4]
+            )
+            semantic_stability = (semantic.get("clustering") or {}).get("bootstrapStabilityAMI")
+            semantic_drift = (semantic.get("geometry") or {}).get("longRecentCosineDistance")
+        elif deep_text.get("available"):
             topic_html = "".join(
                 f'<div class="topicrow"><span>{esc(topic.get("label"))}</span><b>{_percent(topic.get("prevalence"))}</b></div>'
                 for topic in (deep_text.get("topics") or [])[:4]
@@ -171,8 +183,8 @@ def render(data: dict[str, Any], metrics: dict[str, Any], output: Path) -> None:
 <section id="lyrics"><div class="shell">
 <div class="sectionhead"><h2>歌词里，也有一张地图。</h2><p>{fmt_num(text_metrics.get('songsWithLyrics'))}/{fmt_num(text_metrics.get('selectedSongs'))} 首歌词进入本次文本分析</p></div>
 <div class="textmap">
-<div><div class="subhead">BEHAVIOR-WEIGHTED TF-IDF</div><div class="termwall">{_term_tags(text_metrics.get('topTerms') or [])}</div><div class="subhead text-sub">EXPLORATORY NMF THEMES</div><div class="topiclist">{topic_html or '<div class="empty">深度主题层未启用</div>'}</div></div>
-<div class="textaside"><div class="textfact"><span>词汇分布差异 · JSD</span><b>{drift_text}</b></div><div class="textfact"><span>潜在语义距离 · LSA</span><b>{semantic_text}</b></div><div class="textfact"><span>NMF ↔ LSA/KMeans 一致性 · AMI</span><b>{agreement_text}</b></div><div class="textfact"><span>最近更常出现</span><div class="termwall small">{_term_tags(drift.get('recentRisingTerms') or [], limit=8)}</div></div></div>
+<div><div class="subhead">BEHAVIOR-WEIGHTED TF-IDF</div><div class="termwall">{_term_tags(text_metrics.get('topTerms') or [])}</div><div class="subhead text-sub">{topic_label}</div><div class="topiclist">{topic_html or '<div class="empty">深度主题层未启用</div>'}</div></div>
+<div class="textaside"><div class="textfact"><span>词汇分布差异 · JSD</span><b>{drift_text}</b></div><div class="textfact"><span>多语 embedding 长期↔近期距离</span><b>{f"{float(semantic_drift):.3f}" if isinstance(semantic_drift, (int, float)) else semantic_text}</b></div><div class="textfact"><span>{'Embedding bootstrap stability · AMI' if semantic.get('available') else 'NMF ↔ LSA/KMeans 一致性 · AMI'}</span><b>{f"{float(semantic_stability):.3f}" if isinstance(semantic_stability, (int, float)) else agreement_text}</b></div><div class="textfact"><span>最近更常出现</span><div class="termwall small">{_term_tags(drift.get('recentRisingTerms') or [], limit=8)}</div></div></div>
 </div>
 </div></section>
 """

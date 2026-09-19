@@ -8,6 +8,7 @@ on:
       - "nelisten/**"
       - ".github/workflows/pages.yml"
       - "pyproject.toml"
+      - "public/semantic.json"
 
 permissions:
   contents: read

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "semantic-v1",
+  "available": false,
+  "reason": "Run the Deep semantic analysis workflow to generate the public-safe aggregate.",
+  "safety": {
+    "containsLyrics": false,
+    "containsSongIds": false,
+    "containsSongTitles": false,
+    "containsEmbeddings": false
+  }
+}

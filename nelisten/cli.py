@@ -13,6 +13,7 @@ from .metrics import analyze
 from .normalize import normalize
 from .report import render
 from .security import is_local_api
+from .semantic import DEFAULT_MODEL, DEFAULT_REVISION, analyze_semantic
 from .snapshot import snapshot
 from .textmining import select_text_corpus_song_ids
 
@@ -23,6 +24,11 @@ def _data_dir(value: str | None) -> Path:
 
 def build_report(normalized: dict, data_dir: Path) -> Path:
     metrics = analyze(normalized)
+    semantic_path = Path(os.environ.get("NELISTEN_SEMANTIC_PATH") or "public/semantic.json")
+    if semantic_path.exists():
+        semantic = read_json(semantic_path)
+        if isinstance(semantic, dict) and semantic.get("available"):
+            metrics["semantic"] = semantic
     report_dir = data_dir / "report"
     previous_path = report_dir / "history.previous.json"
     previous = read_json(previous_path) if previous_path.exists() else {}
@@ -61,6 +67,13 @@ def main(argv: list[str] | None = None) -> int:
 
     p_doctor = sub.add_parser("doctor", help="inspect local state and coverage")
     p_doctor.add_argument("--data-dir")
+
+    p_semantic = sub.add_parser("semantic", help="run multilingual embedding analysis on a private normalized archive")
+    p_semantic.add_argument("--data-dir")
+    p_semantic.add_argument("--input")
+    p_semantic.add_argument("--output", default="public/semantic.json")
+    p_semantic.add_argument("--model", default=os.environ.get("NELISTEN_SEMANTIC_MODEL", DEFAULT_MODEL))
+    p_semantic.add_argument("--revision", default=os.environ.get("NELISTEN_SEMANTIC_REVISION", DEFAULT_REVISION))
 
     args = parser.parse_args(argv)
     data_dir = _data_dir(getattr(args, "data_dir", None))
@@ -116,6 +129,16 @@ def main(argv: list[str] | None = None) -> int:
         for name, ok, detail in inspect(data_dir, normalized):
             print(f"{'✓' if ok else '○'} {name}: {detail}")
         return 0
+
+    if args.cmd == "semantic":
+        path = Path(args.input) if args.input else data_dir / "normalized" / "latest.json"
+        normalized = read_json(path)
+        result = analyze_semantic(normalized, model_name=args.model, revision=args.revision)
+        output = Path(args.output)
+        write_json(output, result)
+        print(f"semantic report: {output}")
+        print(f"available: {bool(result.get('available'))}")
+        return 0 if result.get("available") else 1
 
     return 2
 
